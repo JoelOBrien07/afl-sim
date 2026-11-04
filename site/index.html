@@ -331,7 +331,7 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
       <div class="vhead">
         <div>
           <h2>Backtest</h2>
-          <p>Each predictor tips every past game and is marked against what really happened. Our model, SirenSim v1, only ever uses results from before the game it is tipping. The first season in the data is used to warm it up, so it is not scored.</p>
+          <p>Each predictor tips every past game and is marked against what really happened. Our models, SirenSim v1 and v2, only ever use information from before the game they are tipping. The first season in the data is used to warm it up, so it is not scored.</p>
         </div>
       </div>
       <p class="note" id="btEmpty" hidden>No past seasons are loaded, so there is nothing to replay. Past seasons are downloaded by the data script into data/history.json. See the README.</p>
@@ -344,16 +344,21 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
         <div class="vhead">
           <div>
             <h3 class="sub">SirenSim v1 settings</h3>
-            <p>Rating speed is how far a surprise moves a rating. Carry over is how much of a rating survives into the next season. Rest and travel are worth in points. Everything on this tab and the Models tab updates as you move them.</p>
+            <p>Rating speed is how far a surprise moves a rating. Carry over is how much of a rating survives into the next season. Rest and travel are worth in points. Blend mixes in the average of the Squiggle models, which makes the tip an ensemble and no longer a pure test of our own signals. These settings are for v1 only. Everything on this tab and the Models tab updates as you move them.</p>
           </div>
-          <div class="chips"><button class="btn ghost" id="mReset" type="button">Reset settings</button></div>
+          <div class="chips"><button class="btn" id="mTune" type="button">Find best settings</button><button class="btn ghost" id="mReset" type="button">Reset settings</button></div>
         </div>
         <div class="sliders">
           <div class="sl"><div class="labrow"><span>Rating speed</span><output id="mKOut"></output></div><input type="range" id="mK" min="0" max="0.2" step="0.005" value="0.07"></div>
           <div class="sl"><div class="labrow"><span>Carry over between seasons</span><output id="mCarryOut"></output></div><input type="range" id="mCarry" min="0" max="1" step="0.05" value="0.7"></div>
           <div class="sl"><div class="labrow"><span>Rest, per extra day</span><output id="mRestOut"></output></div><input type="range" id="mRest" min="0" max="2" step="0.1" value="0.5"></div>
           <div class="sl"><div class="labrow"><span>Travel, per 1,000 km</span><output id="mTravelOut"></output></div><input type="range" id="mTravel" min="0" max="4" step="0.1" value="1"></div>
+          <div class="sl"><div class="labrow"><span>Blend with Squiggle models</span><output id="mBlendOut"></output></div><input type="range" id="mBlend" min="0" max="1" step="0.05" value="0"></div>
         </div>
+        <p class="note" id="tuneOut" hidden></p>
+        <div class="chips"><button class="btn" id="mApply" type="button" hidden>Use these settings</button></div>
+        <h3 class="sub">What SirenSim v2 learned</h3>
+        <div id="v2Box"></div>
         <h3 class="sub">What weather does to games</h3>
         <div id="wxBox"></div>
       </div>
@@ -796,7 +801,10 @@ function sourceOptions(){
 // Predictions are WALK-FORWARD: a game is predicted before its own result is known, using only earlier
 // games, so the backtest is honest. The starting settings are sensible guesses, not fitted to the data.
 // If you tune the sliders on the same seasons you then test on, the scores will flatter the model.
-const MODEL_DEFAULTS={k:0.07,carry:0.7,rest:0.5,travel:1.0};
+// blend is how much the final tip leans on the average of the Squiggle models' predicted margins (0 = our model alone,
+// 1 = Squiggle models alone where they have a tip). Mixing independent predictors usually beats any one of them.
+// It is 0 by default so that SirenSim v1 starts as a pure test of our own ratings, rest and travel.
+const MODEL_DEFAULTS={k:0.07,carry:0.7,rest:0.5,travel:1.0,blend:0};
 // The current settings. The sliders on the Backtest tab change these.
 const model=Object.assign({},MODEL_DEFAULTS);
 // Fixed details of the model (not sliders).
@@ -817,6 +825,9 @@ let TL=[],TLI=new Int32Array(0);
 // OURR = the same run but only using results before the rounds-played slider (for predicting games still to be played).
 // WFIT = what the weather did to scoring, fitted from history (null until there is enough weather data).
 let OURF=null,OURR=null,WFIT=null;
+// V2 = SirenSim v2, which is trained by the data refresh on player data and lives in data/v2.json (null if that file is missing).
+// V2.pred maps a Squiggle game id to the expected home margin. V2.weights lists what the model learned.
+let V2=null;
 
 // Straight-line distance in km between two points on the earth (the haversine formula).
 function km(lat1,lon1,lat2,lon2){
@@ -871,7 +882,7 @@ function buildTimeline(hist){
       if(isFinite(u)){lastU[h]=u;lastU[a]=u}
       lastY[h]=s.y;lastY[a]=s.y;
       const done=g.done&&g.hs!=null&&g.as!=null;
-      TL.push({y:s.y,h,a,u,res:done?g.hs-g.as:null,tot:done?g.hs+g.as:null,restH:rh,restA:ra,dH,dA,
+      TL.push({y:s.y,h,a,u,res:done?g.hs-g.as:null,tot:done?g.hs+g.as:null,id:g.id,restH:rh,restA:ra,dH,dA,
         wx:Array.isArray(g.wx)?g.wx:null,cur:s.cur?k:-1,
         tips:s.cur?(M.byGame.get(k)||null):(s.tipsBy.get(g.id)||null)});
       if(s.cur)TLI[k]=TL.length-1;
@@ -891,7 +902,11 @@ function runModel(cutR){
     const hga=(hs+HGA_PRIOR*HGA_PRIOR_N)/(hn+HGA_PRIOR_N);
     const rd=Math.max(-4,Math.min(4,e.restH-e.restA));
     const E=rat[e.h]-rat[e.a]+hga+model.rest*rd+model.travel*(e.dA-e.dH)/1000;
-    pred[i]=E;
+    // The published prediction. With blend above 0 it is mixed with the average margin the Squiggle models tipped for this game.
+    // Ratings below still learn from our own E, so they are not contaminated by the other models.
+    let out=E;
+    if(model.blend>0&&e.tips){let ms=0,mn=0;for(const t of e.tips)if(t.m!=null){ms+=t.m;mn++}if(mn)out=(1-model.blend)*E+model.blend*ms/mn}
+    pred[i]=out;
     // Only learn from games whose result is known at this point.
     if(e.res!=null&&(e.cur<0||GR[e.cur]<cutR)){
       const A=Math.max(-MARGIN_CAP,Math.min(MARGIN_CAP,e.res));
@@ -999,6 +1014,8 @@ function backtestRows(season){
     consensusInto(get('cons'),e);
     const E=OURF.pred[i];
     scoreInto(get('ours'),E>=0,Phi(E/MODEL_SD)*100,E,e.res);
+    const v2=V2&&V2.pred[e.id];
+    if(v2!=null)scoreInto(get('ours2'),v2>=0,Phi(v2/MODEL_SD)*100,v2,e.res);
     scoreInto(get('home'),true,null,HOME_BASELINE,e.res);
   }
   const rows=[];
@@ -1006,6 +1023,7 @@ function backtestRows(season){
     if(typeof k==='number'){if(a.n>=20)rows.push(accRow(k,srcName(k),a,false))}
     else if(k==='cons')rows.push(accRow(k,'Consensus of all models',a,false));
     else if(k==='ours')rows.push(accRow(k,'SirenSim v1 (ours)',a,true));
+    else if(k==='ours2')rows.push(accRow(k,'SirenSim v2 (ours)',a,true));
     else rows.push(Object.assign(accRow(k,'Always tip the home side',a,false),{base:true}));
   });
   rows.sort((a,b)=>b.acc-a.acc||(a.mae==null?1:b.mae==null?-1:a.mae-b.mae));
@@ -1015,7 +1033,7 @@ function backtestRows(season){
 // (so the rounds-played slider rewinds them too).
 function extraRows(){
   if(!OURF)return[];
-  const cons=newAcc(),ours=newAcc();
+  const cons=newAcc(),ours=newAcc(),ours2=newAcc();
   for(let g=0;g<NG;g++){
     if(!played(g))continue;
     const i=TLI[g];if(!(i>=0))continue;
@@ -1023,11 +1041,51 @@ function extraRows(){
     consensusInto(cons,e);
     const E=OURF.pred[i];
     scoreInto(ours,E>=0,Phi(E/MODEL_SD)*100,E,e.res);
+    const v2=V2&&V2.pred[e.id];
+    if(v2!=null)scoreInto(ours2,v2>=0,Phi(v2/MODEL_SD)*100,v2,e.res);
   }
   const rows=[];
   if(cons.n)rows.push(accRow('cons','Consensus of all models',cons,false));
   if(ours.n)rows.push(accRow('ours','SirenSim v1 (ours)',ours,true));
+  if(ours2.n)rows.push(accRow('ours2','SirenSim v2 (ours)',ours2,true));
   return rows;
+}
+
+// TUNING THE MODEL
+// Searches for the slider settings that make SirenSim v1 miss by the fewest points. To keep it honest, the search only
+// looks at the older seasons ("training"), and the newest seasons are held back ("test") and only used to check the result.
+// If the test seasons do not improve, the settings were just fitted to quirks of the old seasons and should not be trusted.
+// Method: try every value of one slider while the others stay put, keep the best, move to the next slider, and repeat a few times.
+function evalModel(years){
+  const r=runModel(Infinity);let n=0,ok=0,err=0;
+  for(let i=0;i<TL.length;i++){
+    const e=TL[i];if(e.res==null||!years.has(e.y))continue;
+    const E=r.pred[i];n++;err+=Math.abs(E-e.res);if(e.res===0||(E>=0)===(e.res>0))ok++;
+  }
+  return{n,mae:n?err/n:0,acc:n?ok/n*100:0};
+}
+// Returns null if there are not enough seasons, otherwise the best settings and how they did on training and test seasons.
+function tuneModel(){
+  const yrs=evalYears();if(yrs.length<2)return null;
+  const hold=yrs.length>=4?2:1,trainYears=yrs.slice(0,yrs.length-hold),testYears=yrs.slice(-hold);
+  const tr=new Set(trainYears),te=new Set(testYears),saved=Object.assign({},model);
+  const range=(lo,hi,st)=>Array.from({length:Math.round((hi-lo)/st)+1},(_,i)=>+(lo+i*st).toFixed(4));
+  const grid={k:range(0,0.2,0.005),carry:range(0,1,0.05),rest:range(0,2,0.1),travel:range(0,4,0.1),blend:range(0,1,0.05)};
+  const cur=Object.assign({},MODEL_DEFAULTS);
+  const score=()=>({train:evalModel(tr),test:evalModel(te)});
+  Object.assign(model,cur);const def=score();let best=def.train.mae;
+  for(let pass=0;pass<4;pass++){
+    let moved=false;
+    for(const key of Object.keys(grid)){
+      let bv=cur[key];
+      for(const v of grid[key]){model[key]=v;const m=evalModel(tr).mae;if(m<best-1e-9){best=m;bv=v;moved=true}}
+      cur[key]=bv;model[key]=bv;
+    }
+    if(!moved)break;
+  }
+  Object.assign(model,cur);const tuned=score();
+  Object.assign(model,saved);
+  return{params:cur,def,tuned,trainYears,testYears};
 }
 // ===== end of the engine: nothing above this line touches the web page =====
 /*END*/
@@ -1277,6 +1335,7 @@ function syncModelSliders(){
   $('#mK').value=model.k;$('#mKOut').textContent=model.k.toFixed(3);
   $('#mCarry').value=model.carry;$('#mCarryOut').textContent=Math.round(model.carry*100)+'%';
   $('#mRest').value=model.rest;$('#mRestOut').textContent=model.rest.toFixed(1)+' pts';
+  $('#mBlend').value=model.blend;$('#mBlendOut').textContent=Math.round(model.blend*100)+'%';
   $('#mTravel').value=model.travel;$('#mTravelOut').textContent=model.travel.toFixed(1)+' pts';
 }
 // One-time setup of the Backtest tab after the data loads.
@@ -1303,14 +1362,26 @@ function renderBacktest(){
   $('#btTable').innerHTML=h+'</tbody></table>';
   $('#btNote').textContent='The ± is the 95% margin of error from the number of games alone, so gaps smaller than it are noise. Bits reward confident right tips and punish confident wrong ones (higher is better). Margin error is the average miss in points (lower is better). A model that only started tipping recently shows fewer games. SirenSim v1 starts each season with its ratings carried over and learns as the season goes.';
   // By season: our model against the consensus and the best single model.
-  let t='<table class="tbl narrow"><thead><tr><th>Season</th><th>Games</th><th>SirenSim v1</th><th>Consensus</th><th>Best single model</th></tr></thead><tbody>';
+  let t='<table class="tbl narrow"><thead><tr><th>Season</th><th>Games</th><th>SirenSim v1</th><th>SirenSim v2</th><th>Consensus</th><th>Best single model</th></tr></thead><tbody>';
   yrs.forEach(y=>{
-    const rs=backtestRows(y),ours=rs.find(r=>r.id==='ours'),cons=rs.find(r=>r.id==='cons');
+    const rs=backtestRows(y),ours=rs.find(r=>r.id==='ours'),ours2=rs.find(r=>r.id==='ours2'),cons=rs.find(r=>r.id==='cons');
     const best=rs.filter(r=>typeof r.id==='number')[0];
-    t+='<tr><td>'+y+'</td><td>'+(ours?ours.n:'–')+'</td><td>'+(ours?ours.acc.toFixed(1)+'%':'–')+'</td><td>'+(cons?cons.acc.toFixed(1)+'%':'–')+'</td><td>'+(best?esc(best.name)+' '+best.acc.toFixed(1)+'%':'–')+'</td></tr>';
+    t+='<tr><td>'+y+'</td><td>'+(ours?ours.n:'–')+'</td><td>'+(ours?ours.acc.toFixed(1)+'%':'–')+'</td><td>'+(ours2?ours2.acc.toFixed(1)+'%':'–')+'</td><td>'+(cons?cons.acc.toFixed(1)+'%':'–')+'</td><td>'+(best?esc(best.name)+' '+best.acc.toFixed(1)+'%':'–')+'</td></tr>';
   });
   $('#btSeasons').innerHTML=t+'</tbody></table>';
+  renderV2Box();
   renderWeatherBox();
+}
+// What SirenSim v2 learned. Each weight is how many points of margin the model gives for one "spread" more of that number
+// (a typical difference between two teams). A big positive number means that thing matters and favours the home side.
+function renderV2Box(){
+  const box=$('#v2Box');
+  if(!V2){box.innerHTML='<p class="note">SirenSim v2 is not available yet. It is built by the data refresh from player data (see the README). If this stays empty, check the "Build SirenSim v2" step in the Actions log.</p>';return}
+  const mx=Math.max(1,...V2.weights.map(x=>Math.abs(x.w)));
+  let h='<table class="tbl narrow"><thead><tr><th>What it looks at</th><th>Points of margin per spread</th></tr></thead><tbody>';
+  V2.weights.slice().sort((a,b)=>Math.abs(b.w)-Math.abs(a.w)).forEach(x=>{h+='<tr><td><span class="mname">'+esc(x.name)+'</span></td><td>'+(x.w>=0?'+':'−')+Math.abs(x.w).toFixed(2)+' <span style="display:inline-block;height:8px;border-radius:4px;background:var(--accent);opacity:.55;vertical-align:middle;width:'+Math.round(Math.abs(x.w)/mx*120)+'px"></span></td></tr>'});
+  const m=V2.meta||{},e=m.eval;
+  box.innerHTML='<div class="scroll">'+h+'</tbody></table></div><p class="note">'+(e?'On '+e.n+' games it predicted before they happened, using rating, rest and travel alone gets '+e.base.acc+'% right (margin error '+e.base.mae+'), and adding lineup and team form gets '+e.v2.acc+'% (margin error '+e.v2.mae+'). ':'')+'Learned from '+(m.trainGames||'?')+' games by a ridge regression, which is a straight-line fit that is told not to over-trust any one number. Each season is only predicted by a model trained on earlier seasons.</p>';
 }
 // What the weather did to games, from history: dry against wet games, and the fitted effect of rain and wind.
 function renderWeatherBox(){
@@ -1321,6 +1392,23 @@ function renderWeatherBox(){
     +row('Dry (under '+WET_MM+' mm of rain)',WFIT.dry)+row('Wet ('+WET_MM+' mm or more)',WFIT.wet)+'</tbody></table>';
   const sg=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(2);
   box.innerHTML='<div class="scroll">'+h+'</div><p class="note">From '+WFIT.n+' played games with weather. Each extra mm of rain in the first three hours changes the total by '+sg(WFIT.b[1])+' points, and each extra 10 km/h of wind by '+sg(WFIT.b[2]*10)+' points. Margins in wet games are '+(WFIT.ratio>1.005?'wilder':WFIT.ratio<0.995?'tighter':'about the same')+' than in dry ones (scaled by '+WFIT.ratio.toFixed(2)+', limited to between 0.9 and 1.3). Wet games are rare, so treat that as a rough guide. The simulator uses these numbers for upcoming games that have a forecast, if "Use weather" is ticked.</p>';
+}
+// Runs the settings search and shows how it went. The newest seasons were never used in the search, so their result is the honest one.
+let tuned=null;
+function runTune(){
+  const out=$('#tuneOut'),ap=$('#mApply');
+  out.hidden=false;ap.hidden=true;out.textContent='Searching…';
+  setTimeout(()=>{
+    tuned=tuneModel();
+    if(!tuned){out.textContent='Need at least two scored seasons to tune.';return}
+    const t=tuned,yr=a=>a[0]===a[a.length-1]?a[0]:a[0]+' to '+a[a.length-1];
+    const P=t.params,d=t.def.test,n=t.tuned.test,better=n.mae<d.mae-0.15;
+    out.textContent='Searched on '+yr(t.trainYears)+' and checked on '+yr(t.testYears)+', which the search never saw. '
+      +'Best settings: rating speed '+P.k.toFixed(3)+', carry over '+Math.round(P.carry*100)+'%, rest '+P.rest.toFixed(1)+' pts, travel '+P.travel.toFixed(1)+' pts, blend with Squiggle models '+Math.round(P.blend*100)+'%. '
+      +'On the checked seasons, margin error is '+n.mae.toFixed(2)+' (was '+d.mae.toFixed(2)+' with the starting settings) and accuracy is '+n.acc.toFixed(1)+'% (was '+d.acc.toFixed(1)+'%). '
+      +(better?'That is an improvement on unseen games, though a couple of seasons is still a small sample.':'That is not a clear improvement on unseen games, so the starting settings are about as good as these inputs allow.');
+    ap.hidden=false;
+  },30);
 }
 // Called whenever a model setting changes: rerun the model, refresh everything that depends on it, and re-simulate.
 function onModelChange(){
@@ -1426,10 +1514,12 @@ $('#hga').addEventListener('input',e=>{state.hga=+e.target.value;$('#hgaOut').te
 $('#sd').addEventListener('input',e=>{state.sd=+e.target.value;$('#sdOut').textContent=state.sd;queueRun(350)});
 // Backtest tab: season dropdown, the four model sliders and the reset button.
 $('#btSeason').addEventListener('change',e=>{btSeason=e.target.value;renderBacktest()});
-['mK','mCarry','mRest','mTravel'].forEach(id=>$('#'+id).addEventListener('input',e=>{
-  const key={mK:'k',mCarry:'carry',mRest:'rest',mTravel:'travel'}[id];
+['mK','mCarry','mRest','mTravel','mBlend'].forEach(id=>$('#'+id).addEventListener('input',e=>{
+  const key={mK:'k',mCarry:'carry',mRest:'rest',mTravel:'travel',mBlend:'blend'}[id];
   model[key]=Number(e.target.value);syncModelSliders();onModelChange();
 }));
+$('#mTune').addEventListener('click',runTune);
+$('#mApply').addEventListener('click',()=>{if(!tuned)return;Object.assign(model,tuned.params);syncModelSliders();onModelChange()});
 $('#mReset').addEventListener('click',()=>{Object.assign(model,MODEL_DEFAULTS);syncModelSliders();onModelChange()});
 // "Use weather" tick box on the Simulator tab.
 $('#useWx').addEventListener('change',e=>{state.useWeather=e.target.checked;rebuildMU();queueRun(0)});
@@ -1511,8 +1601,18 @@ async function loadHistory(){
     return j&&Array.isArray(j.seasons)&&j.seasons.length?j:null;
   }catch(e){return null}
 }
+// Downloads data/v2.json (SirenSim v2's predictions). Returns null if it is missing, which just means v2 is not shown.
+async function loadV2(){
+  try{
+    const res=await fetch('data/v2.json',{cache:'no-cache'});
+    if(!res.ok)return null;
+    const j=await res.json();
+    return j&&j.pred&&Array.isArray(j.weights)?j:null;
+  }catch(e){return null}
+}
 // If anything goes wrong while reading real data, we log it to the browser console and use the example season instead of showing a blank page.
-Promise.all([loadData(),loadHistory()]).then(([data,hist])=>{
+Promise.all([loadData(),loadHistory(),loadV2()]).then(([data,hist,v2])=>{
+  V2=v2;
   try{if(data){buildReal(data);setupModels(data)}else buildExample()}
   catch(e){console.error('Could not use season.json, using example data.',e);M.has=false;M.byGame=new Map();M.ids=new Set();buildExample()}
   // Default to the models when tips exist. Otherwise the club ratings are the only choice.
@@ -1520,6 +1620,8 @@ Promise.all([loadData(),loadHistory()]).then(([data,hist])=>{
   if(state.real){
     try{buildTimeline(hist)}catch(e){console.error('Could not use history.json, using this season only.',e);buildTimeline(null)}
     if(!CUSTOM_MODELS.some(x=>x.id==='siren1'))CUSTOM_MODELS.push({id:'siren1',name:'SirenSim v1 (our model)',predict:g=>{const i=TLI[g];return(OURR&&i>=0)?OURR.pred[i]:null}});
+    // SirenSim v2 (if its file exists) is also a choice in the Prediction source dropdown.
+    if(V2&&!CUSTOM_MODELS.some(x=>x.id==='siren2'))CUSTOM_MODELS.push({id:'siren2',name:'SirenSim v2 (our model)',predict:g=>{const m=V2.pred[GID[g]];return m==null?null:m}});
     refitModel();
   }
   state.source=M.has?'all':'ratings';

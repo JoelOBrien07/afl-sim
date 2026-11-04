@@ -34,8 +34,11 @@ After that it refreshes itself every 6 hours. GitHub pauses scheduled workflows 
 |---|---|
 | `site/index.html` | The whole website in one file (styles, page and script, no build step) |
 | `scripts/fetch-data.mjs` | Downloads games, results and model tips from Squiggle, plus weather from Open-Meteo, and writes `site/data/season.json` (this season) and `site/data/history.json` (past seasons) |
-| `.github/workflows/update-data.yml` | Runs the script on a schedule and publishes the site |
-| `.gitignore` | Keeps the generated data files out of git |
+| `scripts/fetch-players.R` | Downloads player level stats and the named teams (R, using the fitzRoy package) into `build/` for SirenSim v2 |
+| `scripts/build-v2.mjs` | Builds lineup and form numbers, trains SirenSim v2 and writes `site/data/v2.json` |
+| `scripts/probe-sources.mjs`, `scripts/probe-fitzroy.R`, `.github/workflows/probe-sources.yml` | A manual check of which extra data sources GitHub can reach. Not part of the site |
+| `.github/workflows/update-data.yml` | Runs the scripts on a schedule and publishes the site |
+| `.gitignore` | Keeps the generated data files and the raw player data (`build/`) out of git |
 
 If `site/data/season.json` is missing, the site falls back to a clearly labelled example season so you can still try it.
 
@@ -57,6 +60,7 @@ Every section has a comment banner, so searching for the words in the table belo
 | Drawing the page | `RENDER FUNCTIONS`, `MODELS TAB` | Functions named `renderLadder`, `renderClub`, `renderModels` and so on |
 | Tabs, buttons and sliders | `TABS`, `CONTROLS` | What happens when you move a slider, click something or change tab |
 | Our model, backtest, weather | `OUR OWN MODEL`, `TIMELINE`, `SCORING PREDICTORS`, `WEATHER EFFECTS`, `BACKTEST TAB` | SirenSim v1 (rating + rest + travel), scoring every predictor on past games, and the rain/wind fit |
+| SirenSim v2 on the site | `renderV2Box`, `loadV2`, `siren2` | Loads `data/v2.json`, scores it on the Backtest tab, shows what it learned |
 | Start-up | `BOOT` | Loads the data and runs the first simulation |
 
 Searching in VS Code is not case sensitive by default, so Ctrl+Shift+F finds these from any file.
@@ -83,6 +87,17 @@ Searching in VS Code is not case sensitive by default, so Ctrl+Shift+F finds the
 - **Weather** comes from [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0, keep the credit in the page). Rain and wind are fitted against total points from history, and upcoming games with a forecast get a different expected total and more randomness when wet. Untick "Use weather" on the Simulator tab to turn that off.
 - **History is cached.** Past seasons never change, so the workflow saves `history.json` between runs. To force a fresh download, change `history-v2` to `history-v3` in `.github/workflows/update-data.yml`. Locally, set `FORCE_HISTORY=1`. `HISTORY_SEASONS` (default 10) sets how many past seasons, and `WEATHER=0` skips weather.
 - Unknown grounds are listed in the data script's log. Add them to the `VENUES` table in `scripts/fetch-data.mjs`.
+
+## SirenSim v2 (learns from player data)
+
+v2 looks for patterns instead of using hand-made rules. For every game it builds these numbers using only what was known beforehand: club rating gap, rest, travel, **lineup strength** (how good the 22 players on the team sheet are, from their recent form in Fryzigg's ratings) and **team form** (inside 50s, clearances, contested possessions, tackles, score involvements and metres gained compared with opponents). A ridge regression then learns how many points of margin each is worth.
+
+- **Honest testing:** each season is only predicted by a model trained on earlier seasons. Upcoming games use a model trained on everything played so far. The Backtest tab shows v2 next to v1 and the Squiggle models, and a table of what v2 learned, plus how it compares with the same model using only rating, rest and travel.
+- **Where it runs:** in the Action, in the block of steps marked SirenSim v2. These steps are allowed to fail without stopping the deploy. If v2 is missing from the site, open the run in the Actions tab and look at **Download player data** and **Build SirenSim v2**.
+- **Data used by v2:** player stats come from [Fryzigg](https://cran.r-project.org/web/packages/fitzRoy/vignettes/using-fryzigg-stats.html) and named teams from AFL.com.au, both through the [fitzRoy](https://cran.r-project.org/web/packages/fitzRoy/vignettes/fitzRoy.html) R package. Please read their terms of use before sharing the site outside your team. The raw player data lives only in `build/` on the build machine and is **never published**. Only our own predictions and the learned weights go into `site/data/v2.json`.
+- **Caching:** the player data is saved between runs and only new seasons and the current season are downloaded. To force a full re-download, change `players-v1` to `players-v2` in the workflow.
+- **Running it locally** needs R with the fitzRoy package: `SQUIGGLE_CONTACT="you@example.com" node scripts/fetch-data.mjs`, then `Rscript scripts/fetch-players.R`, then `node scripts/build-v2.mjs`.
+- **Known limits:** for past games the lineup is the team that actually played (including late changes), while upcoming games use the named team or, before one is named, each side's last team. Footywire blocks automated downloads, so it is not used. Season average ratings are used to put scores on one scale, which very slightly looks ahead within a season.
 
 ## Adding your own model later
 

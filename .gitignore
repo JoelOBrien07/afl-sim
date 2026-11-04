@@ -2,5 +2,8 @@
 # so there is no need to commit the copies you make while testing locally.
 site/data/
 
+# Raw player data used to train v2. It is downloaded by the Action and is never published.
+build/
+
 node_modules/
 .DS_Store

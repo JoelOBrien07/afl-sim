@@ -1,7 +1,8 @@
 # This workflow rebuilds and publishes the website. It does these things:
 #   1. Downloads fresh AFL data and weather (scripts/fetch-data.mjs).
-#   2. Bundles the site/ folder, including the new data/season.json and data/history.json.
-#   3. Publishes it to GitHub Pages.
+#   2. Downloads player data and trains SirenSim v2 (scripts/fetch-players.R and scripts/build-v2.mjs).
+#   3. Bundles the site/ folder, including the new data files.
+#   4. Publishes it to GitHub Pages.
 # It runs by itself on a schedule, whenever you push to main, or when you click "Run workflow".
 
 name: Update data and deploy
@@ -66,6 +67,47 @@ jobs:
         run: node scripts/fetch-data.mjs
         env:
           SQUIGGLE_CONTACT: ${{ vars.SQUIGGLE_CONTACT }}
+
+      # ---- SirenSim v2 (player data model) ----
+      # Everything in this block is allowed to fail without stopping the site from deploying (continue-on-error).
+      # If it fails, the site simply has no v2 numbers until the next run.
+
+      # R is needed because the fitzRoy package, which reads the player data, is an R package.
+      - name: Set up R
+        continue-on-error: true
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      # Keep the installed R packages between runs so they are not downloaded every time.
+      - name: Restore saved R packages
+        continue-on-error: true
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/Library
+          key: r-packages-v1-${{ steps.year.outputs.year }}
+
+      - name: Install fitzRoy
+        continue-on-error: true
+        run: Rscript -e 'if (!requireNamespace("fitzRoy", quietly = TRUE)) install.packages("fitzRoy")'
+
+      # Keep the downloaded player data between runs. The script only downloads seasons it does not have, plus the current one.
+      # To force a fresh download of everything, change v1 to v2 in the key below.
+      - name: Restore saved player data
+        continue-on-error: true
+        uses: actions/cache@v4
+        with:
+          path: build/players.tsv
+          key: players-v1-${{ steps.year.outputs.year }}
+
+      - name: Download player data
+        continue-on-error: true
+        run: Rscript scripts/fetch-players.R
+
+      # Train the v2 model and write site/data/v2.json (our predictions only; the raw player data is never published).
+      - name: Build SirenSim v2
+        continue-on-error: true
+        run: node scripts/build-v2.mjs
 
       # Prepare GitHub Pages.
       - uses: actions/configure-pages@v5
