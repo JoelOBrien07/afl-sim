@@ -198,6 +198,59 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
 .foot p{margin:0;max-width:90ch}
 .foot b{color:var(--ink);font-weight:600}
 @media (prefers-reduced-motion:reduce){.meter i,.busy .results{transition:none}}
+
+/* ---- FANTASY TAB: its own green look. The colour variables are redefined only inside #view-fantasy, so every shared
+   component (tables, chips, buttons, tiles) turns green here and nothing else on the site changes. ---- */
+#view-fantasy{
+  --panel:#0B2216; --panel-2:#12331F; --line:#1F4D31; --ink:#ECFBF2; --ink-2:#9BC9AD;
+  --accent:#34D977; --accent-ink:#04200F; --good:#7CF0A8; --warn:#F2C94C; --bad:#FF8A7A;
+  background:radial-gradient(1200px 380px at 10% -10%,#1C6B3A 0%,transparent 60%),linear-gradient(180deg,#0A2A18,#07170E);
+  color:var(--ink);border-radius:0 0 10px 10px;
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]) #view-fantasy{
+    --panel:#FFFFFF; --panel-2:#E6F6EC; --line:#BFE3CC; --ink:#0B2A19; --ink-2:#2F6A48;
+    --accent:#0C8A43; --accent-ink:#FFFFFF; --good:#0C8A43; --warn:#8A6100; --bad:#B3392A;
+    background:radial-gradient(1200px 380px at 10% -10%,#BDEBCD 0%,transparent 60%),linear-gradient(180deg,#E3F6EA,#F2FBF5);
+  }
+}
+:root[data-theme="light"] #view-fantasy{
+  --panel:#FFFFFF; --panel-2:#E6F6EC; --line:#BFE3CC; --ink:#0B2A19; --ink-2:#2F6A48;
+  --accent:#0C8A43; --accent-ink:#FFFFFF; --good:#0C8A43; --warn:#8A6100; --bad:#B3392A;
+  background:radial-gradient(1200px 380px at 10% -10%,#BDEBCD 0%,transparent 60%),linear-gradient(180deg,#E3F6EA,#F2FBF5);
+}
+.fan-hero{display:flex;flex-wrap:wrap;gap:16px;align-items:end;justify-content:space-between}
+.fan-hero h2{margin:0;font:700 clamp(34px,6vw,56px)/.95 var(--display);letter-spacing:.01em}
+.fan-hero h2 span{color:var(--accent)}
+.fan-hero p{margin:6px 0 0;color:var(--ink-2);max-width:62ch}
+.fan-pick{display:flex;gap:12px;flex-wrap:wrap}
+.fan-pick .field{min-width:170px}
+.fan-spot{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.fan-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:6px;border-top:3px solid var(--accent)}
+.fan-card h4{margin:0;font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+.fan-card ol{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.fan-card li{display:flex;justify-content:space-between;gap:8px;font:500 13px var(--mono)}
+.fan-card li button{background:none;border:0;padding:0;color:var(--ink);font:600 15px var(--display);letter-spacing:.03em;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.fan-card li button:hover{color:var(--accent)}
+.fan-card li b{color:var(--accent);font-weight:600}
+.fan-filters{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:12px;align-items:end}
+@media (max-width:720px){.fan-filters{grid-template-columns:1fr 1fr}.fan-filters .field:first-child{grid-column:1/-1}}
+.fan-filters input{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:9px 10px;width:100%;min-width:0}
+.fan-tbl td:nth-child(3),.fan-tbl th:nth-child(3),.fan-tbl td:nth-child(4),.fan-tbl th:nth-child(4){text-align:left}
+.fan-tbl .pname{background:none;border:0;padding:0;color:var(--ink);font:600 16px var(--display);letter-spacing:.03em;cursor:pointer}
+.fan-tbl .pname:hover{color:var(--accent)}
+.fan-tbl .up{color:var(--good)} .fan-tbl .down{color:var(--bad)}
+.fan-tbl td.big{color:var(--accent);font-weight:600}
+.pos{display:inline-block;min-width:34px;text-align:center;font:600 10.5px var(--mono);letter-spacing:.06em;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--ink)}
+.spark{display:block}
+.spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.fan-detail{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px;border-left:4px solid var(--accent)}
+.fan-detail h3{margin:0;font:700 clamp(28px,5vw,44px)/1 var(--display)}
+.fan-detail h3 small{display:block;font:500 12px var(--mono);letter-spacing:.1em;color:var(--ink-2);text-transform:uppercase;margin-top:6px}
+.fan-bars rect.hi{fill:var(--accent)} .fan-bars rect.lo{fill:var(--ink-2);opacity:.45}
+.fan-bars line.avg{stroke:var(--warn);stroke-width:1.5;stroke-dasharray:5 4}
+.fan-bars text{fill:var(--ink-2);font:500 10px var(--mono)}
+.fan-note{font:500 12px/1.5 var(--mono);color:var(--ink-2)}
 </style>
 </head>
 <body>
@@ -250,6 +303,7 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
       <a class="tab" href="#club" data-tab="club">Club</a>
       <a class="tab" href="#models" data-tab="models">Models</a>
       <a class="tab" href="#backtest" data-tab="backtest">Backtest</a>
+      <a class="tab" href="#fantasy" data-tab="fantasy">Fantasy</a>
       <a class="tab" href="#simulator" data-tab="simulator">Simulator</a>
       <a class="tab" href="#tools" data-tab="tools">Tools</a>
     </nav>
@@ -364,7 +418,38 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
       </div>
     </section>
 
-    <!-- TAB 6, SIMULATOR: choose what predicts each game, then adjust club ratings, home ground advantage and how random games are. -->
+    <!-- TAB 6, FANTASY: player scores in the style of a fantasy football site, with its own green look. Filled in by renderFantasy().
+         Needs data/players.json, which the data refresh builds from player stats. -->
+    <section class="view" id="view-fantasy" hidden>
+      <div class="fan-hero">
+        <div>
+          <h2>Fantasy <span>hub</span></h2>
+          <p>Every player's scores game by game: averages, form, ceiling and floor. Pick a scoring system, find a player, and click a name for their full game log.</p>
+        </div>
+        <div class="fan-pick">
+          <div class="field"><label for="fanSeason">Season</label><select id="fanSeason"></select></div>
+          <div class="field"><label for="fanMetric">Scoring</label><select id="fanMetric"></select></div>
+        </div>
+      </div>
+      <p class="note" id="fanEmpty" hidden>No player data yet. It is built by the data refresh (the "Download player data" and "Build Fantasy player data" steps). See the README.</p>
+      <div id="fanBody" style="display:grid;gap:18px" hidden>
+        <div class="fan-spot" id="fanSpot"></div>
+        <div class="fan-filters">
+          <div class="field"><label for="fanQ">Search player</label><input id="fanQ" type="search" placeholder="Start typing a name" autocomplete="off"></div>
+          <div class="field"><label for="fanClub">Club</label><select id="fanClub"></select></div>
+          <div class="field"><label for="fanPos">Position</label><select id="fanPos"><option value="all">All</option><option>DEF</option><option>MID</option><option>RUC</option><option>FWD</option></select></div>
+          <div class="field"><label for="fanMin">Min. games</label><select id="fanMin"><option>1</option><option>3</option><option selected>5</option><option>8</option><option>12</option></select></div>
+        </div>
+        <div class="scroll"><table class="tbl fan-tbl" id="fanTable"></table></div>
+        <div class="chips"><button class="btn ghost" id="fanMore" type="button" hidden>Show more players</button><span class="chip" id="fanCount"></span></div>
+        <div id="fanDetail" hidden></div>
+        <div class="vhead"><div><h3 class="sub">Round leaders</h3></div><div class="field" style="min-width:150px"><label for="fanRound">Round</label><select id="fanRound"></select></div></div>
+        <div class="scroll" id="fanRoundBox"></div>
+        <p class="fan-note">Scores are the SuperCoach, AFL Fantasy and rating-point figures supplied by Fryzigg player stats. This site is not affiliated with SuperCoach or AFL Fantasy and shows no prices or official break-evens. "Proj" is our own simple projection: a weighted average that counts recent games most.</p>
+      </div>
+    </section>
+
+    <!-- TAB 7, SIMULATOR: choose what predicts each game, then adjust club ratings, home ground advantage and how random games are. -->
     <section class="view" id="view-simulator" hidden>
       <div class="vhead">
         <div>
@@ -393,7 +478,7 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
       <p class="note" id="simNote">Higher volatility means more upsets. Home ground advantage is the extra margin the home side starts with. Finals are played at neutral venues.</p>
     </section>
 
-    <!-- TAB 7, TOOLS: "how many seasons until..." keeps simulating until a chosen club does something. -->
+    <!-- TAB 8, TOOLS: "how many seasons until..." keeps simulating until a chosen club does something. -->
     <section class="view" id="view-tools" hidden>
       <div class="vhead">
         <div>
@@ -1098,7 +1183,7 @@ function tuneModel(){
 // Short helper: $("#id") finds one element on the page.
 const $=s=>document.querySelector(s);
 // Tab names. Each matches a link href (#ladder, #heatmap...) and a section id (view-ladder, view-heatmap...).
-const TABS=['ladder','heatmap','club','models','backtest','simulator','tools'];
+const TABS=['ladder','heatmap','club','models','backtest','fantasy','simulator','tools'];
 // Formats a percentage for display: one decimal place, "<0.1" for tiny values, and a dash for zero.
 const f1=p=>p>=99.95?'100':p>=0.05?p.toFixed(1):p>0?'<0.1':'–';
 // Formats a rating with a plus or minus sign, for example +7 or -12.
@@ -1592,6 +1677,159 @@ async function loadData(){
     return j&&Array.isArray(j.games)&&j.games.length?j:null;
   }catch(e){return null}
 }
+// FANTASY TAB
+// PL is data/players.json: { meta, seasons: { "2026": [ { id, n: name, t: team id, p: position, g: [game, ...] } ] } }
+// Each game is [round, date, opponent team id, home 1/away 0, SuperCoach, AFL Fantasy, rating points, disposals, marks, goals, tackles, time on ground %]
+let PL=null;
+// What the tab is currently showing. metric is the index into a game (4 = SuperCoach, 5 = AFL Fantasy, 6 = rating points).
+const FAN={season:null,metric:4,sort:'avg',dir:-1,q:'',club:'all',pos:'all',minG:5,limit:100,sel:null,round:null,rows:[]};
+const FAN_METRICS=[[4,'SuperCoach score'],[5,'AFL Fantasy score'],[6,'Rating points']];
+// Downloads data/players.json. Returns null if it is missing, so the tab shows a message instead.
+async function loadPlayers(){
+  try{
+    const res=await fetch('data/players.json',{cache:'no-cache'});
+    if(!res.ok)return null;
+    const j=await res.json();
+    return j&&j.seasons&&Object.keys(j.seasons).length?j:null;
+  }catch(e){return null}
+}
+const fanAvg=a=>a.length?a.reduce((s,v)=>s+v,0)/a.length:null;
+// Works out one player's numbers for the chosen scoring system. vals are the scores in date order.
+function fanStats(p,m){
+  const vals=p.g.map(g=>g[m]).filter(v=>v!=null);
+  if(!vals.length)return null;
+  const n=vals.length,avg=fanAvg(vals),l3=fanAvg(vals.slice(-3)),l5=fanAvg(vals.slice(-5));
+  const sd=Math.sqrt(fanAvg(vals.map(v=>(v-avg)**2))),sorted=vals.slice().sort((a,b)=>a-b);
+  // Projection: a weighted average where each older game counts 20% less than the one after it.
+  let ws=0,w=1,num=0;for(let i=vals.length-1;i>=0;i--){num+=vals[i]*w;ws+=w;w*=0.8}
+  return{p,n,avg,l3,l5,form:l3-avg,high:sorted[n-1],low:sorted[0],sd,med:n%2?sorted[(n-1)/2]:(sorted[n/2-1]+sorted[n/2])/2,proj:num/ws,last:vals.slice(-10)};
+}
+// Rebuilds the list of player rows for the chosen season and scoring system.
+function fanBuild(){
+  const m=FAN.metric,list=PL.seasons[FAN.season]||[];
+  FAN.rows=list.map(p=>fanStats(p,m)).filter(Boolean);
+}
+// A tiny line chart of recent scores.
+function fanSpark(vals){
+  if(vals.length<2)return'';
+  const lo=Math.min(...vals),hi=Math.max(...vals),r=hi-lo||1,W=72,H=20;
+  const pts=vals.map((v,i)=>(i/(vals.length-1)*(W-4)+2).toFixed(1)+','+(H-2-(v-lo)/r*(H-4)).toFixed(1)).join(' ');
+  return'<svg class="spark" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'"><polyline points="'+pts+'"/></svg>';
+}
+const fanF=v=>v==null?'–':v.toFixed(1);
+const fanSign=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(1);
+// Rows after the search, club, position and minimum games filters, sorted by the chosen column.
+function fanVisible(){
+  const q=FAN.q.trim().toLowerCase();
+  const rows=FAN.rows.filter(r=>r.n>=FAN.minG&&(FAN.club==='all'||r.p.t===Number(FAN.club))&&(FAN.pos==='all'||r.p.p===FAN.pos)&&(!q||r.p.n.toLowerCase().includes(q)));
+  const k=FAN.sort,d=FAN.dir;
+  rows.sort((a,b)=>{
+    const x=k==='name'?a.p.n:k==='club'?TEAMS[a.p.t-1].c:k==='pos'?a.p.p:a[k],y=k==='name'?b.p.n:k==='club'?TEAMS[b.p.t-1].c:k==='pos'?b.p.p:b[k];
+    return (x<y?-1:x>y?1:0)*d||(b.avg-a.avg);
+  });
+  return rows;
+}
+// Draws the four spotlight cards (best average, hottest, coldest, most reliable) from players with enough games.
+function fanSpotlight(){
+  const ok=FAN.rows.filter(r=>r.n>=Math.max(5,FAN.minG));
+  const top=(rows,f,key)=>'<ol>'+rows.slice(0,5).map(r=>'<li><button type="button" data-pid="'+r.p.id+'">'+esc(r.p.n)+'</button><b>'+f(r)+'</b></li>').join('')+'</ol>';
+  const byAvg=ok.slice().sort((a,b)=>b.avg-a.avg);
+  const hot=ok.filter(r=>r.avg>=byAvg[Math.min(byAvg.length-1,150)].avg).sort((a,b)=>b.form-a.form);
+  const cold=hot.slice().reverse();
+  const steady=byAvg.slice(0,100).sort((a,b)=>a.sd-b.sd);
+  const card=(t,body)=>'<div class="fan-card"><h4>'+t+'</h4>'+body+'</div>';
+  $('#fanSpot').innerHTML=card('Best average',top(byAvg,r=>fanF(r.avg)))+card('Hottest form (last 3 vs season)',top(hot,r=>fanSign(r.form)))
+    +card('Coldest form',top(cold,r=>fanSign(r.form)))+card('Most reliable (top 100 averages)',top(steady,r=>'±'+r.sd.toFixed(1)));
+}
+// The main table.
+function fanTable(){
+  const rows=fanVisible(),shown=rows.slice(0,FAN.limit);
+  const cols=[['name','Player'],['club','Club'],['pos','Pos'],['n','GP'],['avg','Avg'],['l3','L3'],['l5','L5'],['form','Form'],['high','High'],['low','Low'],['sd','Spread'],['proj','Proj']];
+  let h='<thead><tr><th>#</th>'+cols.map(([k,l])=>'<th'+(FAN.sort===k?' aria-sort="'+(FAN.dir<0?'descending':'ascending')+'"':'')+'><button type="button" data-k="'+k+'">'+l+'</button></th>').join('')+'<th>Last 10</th></tr></thead><tbody>';
+  shown.forEach((r,i)=>{
+    const t=TEAMS[r.p.t-1];
+    h+='<tr><td>'+(i+1)+'</td><td><button class="pname" type="button" data-pid="'+r.p.id+'">'+esc(r.p.n)+'</button></td><td>'+t.c+'</td><td><span class="pos">'+r.p.p+'</span></td>'
+      +'<td>'+r.n+'</td><td class="big">'+fanF(r.avg)+'</td><td>'+fanF(r.l3)+'</td><td>'+fanF(r.l5)+'</td><td class="'+(r.form>=0?'up':'down')+'">'+fanSign(r.form)+'</td>'
+      +'<td>'+fanF(r.high)+'</td><td>'+fanF(r.low)+'</td><td>±'+r.sd.toFixed(1)+'</td><td>'+fanF(r.proj)+'</td><td>'+fanSpark(r.last)+'</td></tr>';
+  });
+  $('#fanTable').innerHTML=h+(shown.length?'':'<tr><td colspan="14" style="text-align:center;padding:20px">No players match.</td></tr>')+'</tbody>';
+  $('#fanMore').hidden=rows.length<=shown.length;
+  $('#fanCount').textContent='Showing '+shown.length+' of '+rows.length+' players';
+}
+// One player's page: summary tiles, a bar chart of every game, and the game log.
+function fanDetail(id){
+  const box=$('#fanDetail'),r=FAN.rows.find(x=>x.p.id===String(id));
+  if(!r){box.hidden=true;return}
+  FAN.sel=String(id);
+  const p=r.p,m=FAN.metric,t=TEAMS[p.t-1],games=p.g.filter(g=>g[m]!=null);
+  const home=fanAvg(games.filter(g=>g[3]===1).map(g=>g[m])),away=fanAvg(games.filter(g=>g[3]===0).map(g=>g[m]));
+  const tile=(k,v,s)=>'<div class="tile"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="s">'+(s||'&nbsp;')+'</div></div>';
+  // Bar chart: one bar per game, bright when at or above the player's average, with a dashed line for the average.
+  const W=640,H=170,pad=22,bw=Math.min(28,(W-pad*2)/games.length-3),hi=Math.max(...games.map(g=>g[m]),r.avg*1.1),lo=Math.min(0,...games.map(g=>g[m])),step=(W-pad*2)/games.length;
+  // Bars grow up from zero (or down, for the odd negative score).
+  const y=v=>H-pad-((v-lo)/((hi-lo)||1))*(H-pad*2),base=y(0);
+  let svg='<svg class="chart fan-bars" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Scores by game">';
+  games.forEach((g,i)=>{
+    const x=pad+i*step+(step-bw)/2,v=g[m];
+    svg+='<rect class="'+(v>=r.avg?'hi':'lo')+'" x="'+x.toFixed(1)+'" y="'+Math.min(y(v),base).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.abs(base-y(v)).toFixed(1)+'" rx="2"><title>Round '+g[0]+' v '+TEAMS[g[2]-1].c+': '+v+'</title></rect>';
+    if(games.length<=26||i%2===0)svg+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle">'+g[0]+'</text>';
+  });
+  svg+='<line class="avg" x1="'+pad+'" x2="'+(W-pad)+'" y1="'+y(r.avg).toFixed(1)+'" y2="'+y(r.avg).toFixed(1)+'"/><text x="'+(W-pad)+'" y="'+(y(r.avg)-4).toFixed(1)+'" text-anchor="end">avg '+r.avg.toFixed(1)+'</text></svg>';
+  let log='<table class="tbl narrow"><thead><tr><th>Rd</th><th>Opponent</th><th>Score</th><th>Disp</th><th>Marks</th><th>Goals</th><th>Tackles</th><th>TOG%</th></tr></thead><tbody>';
+  p.g.slice().reverse().forEach(g=>{log+='<tr><td>'+g[0]+'</td><td>'+(g[3]?'v ':'@ ')+TEAMS[g[2]-1].c+'</td><td class="big" style="color:var(--accent)">'+(g[m]==null?'–':g[m])+'</td><td>'+(g[7]??'–')+'</td><td>'+(g[8]??'–')+'</td><td>'+(g[9]??'–')+'</td><td>'+(g[10]??'–')+'</td><td>'+(g[11]??'–')+'</td></tr>'});
+  box.innerHTML='<div class="fan-detail"><div class="vhead"><h3>'+esc(p.n)+'<small>'+t.n+' · '+p.p+' · '+FAN.season+'</small></h3><button class="btn ghost" id="fanClose" type="button">Close</button></div>'
+    +'<div class="tiles">'+tile('Average',fanF(r.avg),r.n+' games')+tile('Last 3',fanF(r.l3),fanSign(r.form)+' v season')+tile('High',fanF(r.high))+tile('Low',fanF(r.low))
+    +tile('Home avg',fanF(home))+tile('Away avg',fanF(away))+tile('Projection',fanF(r.proj),'recent games count most')+'</div>'
+    +svg+'<div class="scroll">'+log+'</tbody></table></div></div>';
+  box.hidden=false;
+  box.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+// Top ten scores in one round.
+function fanRound(){
+  const m=FAN.metric,rd=FAN.round,out=[];
+  for(const p of (PL.seasons[FAN.season]||[]))for(const g of p.g)if(String(g[0])===String(rd)&&g[m]!=null)out.push([p,g]);
+  out.sort((a,b)=>b[1][m]-a[1][m]);
+  let h='<table class="tbl narrow"><thead><tr><th>#</th><th>Player</th><th>Club</th><th>Opponent</th><th>Score</th></tr></thead><tbody>';
+  out.slice(0,10).forEach(([p,g],i)=>{h+='<tr><td>'+(i+1)+'</td><td><button class="pname" type="button" data-pid="'+p.id+'" style="background:none;border:0;padding:0;color:var(--ink);font:600 16px var(--display);cursor:pointer">'+esc(p.n)+'</button></td><td>'+TEAMS[p.t-1].c+'</td><td>'+(g[3]?'v ':'@ ')+TEAMS[g[2]-1].c+'</td><td style="color:var(--accent)">'+g[m]+'</td></tr>'});
+  $('#fanRoundBox').innerHTML=h+'</tbody></table>';
+}
+// Redraws everything on the tab after the season, scoring system or a filter changes.
+function renderFantasy(){
+  if(!PL)return;
+  fanBuild();fanSpotlight();fanTable();
+  if(FAN.sel&&FAN.rows.some(x=>x.p.id===FAN.sel))fanDetail(FAN.sel);else $('#fanDetail').hidden=true;
+  const rounds=[...new Set((PL.seasons[FAN.season]||[]).flatMap(p=>p.g.map(g=>g[0])))];
+  rounds.sort((a,b)=>(typeof a==='number'?a:1e3)-(typeof b==='number'?b:1e3));
+  if(!rounds.includes(FAN.round))FAN.round=rounds.filter(x=>typeof x==='number').pop()??rounds[rounds.length-1];
+  $('#fanRound').innerHTML=rounds.map(r=>'<option'+(String(r)===String(FAN.round)?' selected':'')+'>'+r+'</option>').join('');
+  fanRound();
+}
+// One-time setup: fill the dropdowns and hook up the controls. If there is no data, show the message instead.
+function fanInit(){
+  $('#fanEmpty').hidden=!!PL;$('#fanBody').hidden=!PL;
+  if(!PL)return;
+  const yrs=Object.keys(PL.seasons).sort((a,b)=>b-a);
+  FAN.season=yrs[0];
+  $('#fanSeason').innerHTML=yrs.map(y=>'<option>'+y+'</option>').join('');
+  $('#fanMetric').innerHTML=FAN_METRICS.map(([i,l])=>'<option value="'+i+'">'+l+'</option>').join('');
+  $('#fanClub').innerHTML='<option value="all">All clubs</option>'+TEAMS.map((t,i)=>'<option value="'+(i+1)+'">'+t.n+'</option>').join('');
+  $('#fanSeason').addEventListener('change',e=>{FAN.season=e.target.value;FAN.sel=null;FAN.limit=100;renderFantasy()});
+  $('#fanMetric').addEventListener('change',e=>{FAN.metric=Number(e.target.value);renderFantasy()});
+  $('#fanQ').addEventListener('input',e=>{FAN.q=e.target.value;FAN.limit=100;fanTable()});
+  $('#fanClub').addEventListener('change',e=>{FAN.club=e.target.value;FAN.limit=100;fanTable()});
+  $('#fanPos').addEventListener('change',e=>{FAN.pos=e.target.value;FAN.limit=100;fanTable()});
+  $('#fanMin').addEventListener('change',e=>{FAN.minG=Number(e.target.value);FAN.limit=100;fanSpotlight();fanTable()});
+  $('#fanMore').addEventListener('click',()=>{FAN.limit+=100;fanTable()});
+  $('#fanRound').addEventListener('change',e=>{FAN.round=e.target.value;fanRound()});
+  // Clicks anywhere in the tab: sort headers, player names, and the close button.
+  $('#view-fantasy').addEventListener('click',e=>{
+    const k=e.target.closest('[data-k]'),pid=e.target.closest('[data-pid]');
+    if(k){const key=k.dataset.k;if(FAN.sort===key)FAN.dir*=-1;else{FAN.sort=key;FAN.dir=(key==='name'||key==='club'||key==='pos')?1:-1}fanTable();return}
+    if(pid){fanDetail(pid.dataset.pid);return}
+    if(e.target.closest('#fanClose')){FAN.sel=null;$('#fanDetail').hidden=true}
+  });
+  renderFantasy();
+}
 // Downloads data/history.json (past seasons). Returns null if it is missing, so the Backtest tab simply stays empty.
 async function loadHistory(){
   try{
@@ -1611,8 +1849,8 @@ async function loadV2(){
   }catch(e){return null}
 }
 // If anything goes wrong while reading real data, we log it to the browser console and use the example season instead of showing a blank page.
-Promise.all([loadData(),loadHistory(),loadV2()]).then(([data,hist,v2])=>{
-  V2=v2;
+Promise.all([loadData(),loadHistory(),loadV2(),loadPlayers()]).then(([data,hist,v2,players])=>{
+  V2=v2;PL=players;
   try{if(data){buildReal(data);setupModels(data)}else buildExample()}
   catch(e){console.error('Could not use season.json, using example data.',e);M.has=false;M.byGame=new Map();M.ids=new Set();buildExample()}
   // Default to the models when tips exist. Otherwise the club ratings are the only choice.
@@ -1625,7 +1863,7 @@ Promise.all([loadData(),loadHistory(),loadV2()]).then(([data,hist,v2])=>{
     refitModel();
   }
   state.source=M.has?'all':'ratings';
-  setupUI();rebuildMU();renderSimSource();showTab();run(state.n,true);
+  setupUI();fanInit();rebuildMU();renderSimSource();showTab();run(state.n,true);
 });
 </script>
 </body>

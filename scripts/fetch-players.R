@@ -42,6 +42,13 @@ tidy <- function(d) {
     tkl = col(d, "tackles"),
     si = col(d, "score_involvements"),
     mg = col(d, "metres_gained"),
+    # Extra columns for the Fantasy tab: position, AFL Fantasy score, and simple counting stats.
+    pos = col(d, "player_position"),
+    af = col(d, "afl_fantasy_score"),
+    disp = col(d, "disposals"),
+    mk = col(d, "marks"),
+    gl = col(d, "goals"),
+    tog = col(d, "time_on_ground_percentage"),
     stringsAsFactors = FALSE
   )
 }
@@ -57,6 +64,8 @@ old <- NULL
 if (file.exists(players_file)) {
   old <- tryCatch(read.delim(players_file, stringsAsFactors = FALSE, quote = ""), error = function(e) NULL)
 }
+# A saved file from an older version of this script will not have the newer columns, so it is thrown away and downloaded again.
+if (!is.null(old) && !all(c("pos", "af", "disp", "mk", "gl", "tog") %in% names(old))) old <- NULL
 have <- if (!is.null(old)) setdiff(unique(old$year), year) else integer()
 if (!is.null(old)) old <- old[old$year %in% have & old$year %in% seasons, ]
 need <- setdiff(seasons, have)

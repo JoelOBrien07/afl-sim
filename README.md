@@ -35,6 +35,7 @@ After that it refreshes itself every 6 hours. GitHub pauses scheduled workflows 
 | `site/index.html` | The whole website in one file (styles, page and script, no build step) |
 | `scripts/fetch-data.mjs` | Downloads games, results and model tips from Squiggle, plus weather from Open-Meteo, and writes `site/data/season.json` (this season) and `site/data/history.json` (past seasons) |
 | `scripts/fetch-players.R` | Downloads player level stats and the named teams (R, using the fitzRoy package) into `build/` for SirenSim v2 |
+| `scripts/build-players.mjs` | Turns the player table into game logs for the Fantasy tab (`site/data/players.json`) |
 | `scripts/build-v2.mjs` | Builds lineup and form numbers, trains SirenSim v2 and writes `site/data/v2.json` |
 | `scripts/probe-sources.mjs`, `scripts/probe-fitzroy.R`, `.github/workflows/probe-sources.yml` | A manual check of which extra data sources GitHub can reach. Not part of the site |
 | `.github/workflows/update-data.yml` | Runs the scripts on a schedule and publishes the site |
@@ -49,7 +50,7 @@ Every section has a comment banner, so searching for the words in the table belo
 | Part | Search for | What it does |
 |---|---|---|
 | Styles | `STYLES` | All colours are variables at the top. Change them there and the whole site follows |
-| Page layout | `TAB 1` to `TAB 7` | One HTML section per tab. Most are filled in by the script |
+| Page layout | `TAB 1` to `TAB 8` | One HTML section per tab. Most are filled in by the script |
 | How the script is organised | `HOW THIS SCRIPT IS ORGANISED` | Overview of the engine, UI and boot sections, plus a glossary of terms |
 | Season data | `SEASON DATA`, `EXAMPLE SEASON`, `REAL SEASON` | How games are stored, the made-up example season, and the loader for real data |
 | Ratings | `RATINGS FROM RESULTS` | Works out how strong each club is from results |
@@ -60,6 +61,7 @@ Every section has a comment banner, so searching for the words in the table belo
 | Drawing the page | `RENDER FUNCTIONS`, `MODELS TAB` | Functions named `renderLadder`, `renderClub`, `renderModels` and so on |
 | Tabs, buttons and sliders | `TABS`, `CONTROLS` | What happens when you move a slider, click something or change tab |
 | Our model, backtest, weather | `OUR OWN MODEL`, `TIMELINE`, `SCORING PREDICTORS`, `WEATHER EFFECTS`, `BACKTEST TAB` | SirenSim v1 (rating + rest + travel), scoring every predictor on past games, and the rain/wind fit |
+| Fantasy tab | `FANTASY TAB`, `renderFantasy`, `#view-fantasy` | Player scores, form and game logs. The green look is in the `FANTASY TAB` block at the end of the styles |
 | SirenSim v2 on the site | `renderV2Box`, `loadV2`, `siren2` | Loads `data/v2.json`, scores it on the Backtest tab, shows what it learned |
 | Start-up | `BOOT` | Loads the data and runs the first simulation |
 
@@ -98,6 +100,16 @@ v2 looks for patterns instead of using hand-made rules. For every game it builds
 - **Caching:** the player data is saved between runs and only new seasons and the current season are downloaded. To force a full re-download, change `players-v1` to `players-v2` in the workflow.
 - **Running it locally** needs R with the fitzRoy package: `SQUIGGLE_CONTACT="you@example.com" node scripts/fetch-data.mjs`, then `Rscript scripts/fetch-players.R`, then `node scripts/build-v2.mjs`.
 - **Known limits:** for past games the lineup is the team that actually played (including late changes), while upcoming games use the named team or, before one is named, each side's last team. Footywire blocks automated downloads, so it is not used. Season average ratings are used to put scores on one scale, which very slightly looks ahead within a season.
+
+## Fantasy tab
+
+A green, player-focused section: season and scoring picker (SuperCoach score, AFL Fantasy score or rating points), spotlight cards (best average, hottest and coldest form, most reliable), a sortable and filterable table with a last-10 sparkline, a player page with a bar chart and game log, and round leaders.
+
+- **Data:** `site/data/players.json`, built by `scripts/build-players.mjs` from the same player table v2 uses. It holds the last two seasons. The Action step is called "Build Fantasy player data" and is allowed to fail without stopping the deploy.
+- **Unlike the rest of the player data, this file IS published**, because it contains each player's game scores. Please read the Fryzigg and AFL.com.au terms before sharing the site beyond your team. If you would rather not publish it, delete the `Build Fantasy player data` step in the workflow and the tab will show a "no player data" message.
+- **Not SuperCoach:** the tab uses the scores as supplied by Fryzigg and shows no prices, break-evens or logos. Keep it that way so it is not mistaken for an official product. The tab is called Fantasy for that reason.
+- **Positions** are grouped as DEF, MID, RUC and FWD from Fryzigg's position codes. Any code the script does not recognise is printed in the Actions log; add it to `posGroup` in `scripts/build-players.mjs`.
+- **Cache:** the Action's saved player data key is now `players-v2`, because the Fantasy tab needs extra columns. The old saved file is ignored automatically.
 
 ## Adding your own model later
 
