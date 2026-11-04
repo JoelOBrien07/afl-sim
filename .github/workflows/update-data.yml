@@ -1,0 +1,65 @@
+# This workflow rebuilds and publishes the website. It does three things:
+#   1. Downloads fresh AFL data from Squiggle (scripts/fetch-data.mjs).
+#   2. Bundles the site/ folder, including the new data/season.json.
+#   3. Publishes it to GitHub Pages.
+# It runs by itself on a schedule, whenever you push to main, or when you click "Run workflow".
+
+name: Update data and deploy
+
+on:
+  # Run on a timer. The cron format is: minute hour day-of-month month day-of-week.
+  # '0 */6 * * *' means minute 0 of every 6th hour. Change it to refresh more or less often.
+  # Squiggle asks for sensible usage, so avoid going more often than every few hours.
+  schedule:
+    - cron: '0 */6 * * *'
+  # Adds a "Run workflow" button on the Actions tab so you can trigger it by hand.
+  workflow_dispatch:
+  # Also run whenever code is pushed to the main branch, so your edits go live.
+  push:
+    branches: [main]
+
+# What this workflow is allowed to do. It can read the repo and publish to Pages, nothing else.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# If a new run starts while an older one is still going, cancel the older one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Tells GitHub this job publishes to the Pages environment and records the live URL.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Download this repository's files onto the build machine.
+      - uses: actions/checkout@v4
+
+      # Install Node.js (the data script needs it).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Download games, results and model tips from Squiggle and write site/data/season.json.
+      # SQUIGGLE_CONTACT comes from Settings > Secrets and variables > Actions > Variables.
+      - name: Fetch Squiggle data
+        run: node scripts/fetch-data.mjs
+        env:
+          SQUIGGLE_CONTACT: ${{ vars.SQUIGGLE_CONTACT }}
+
+      # Prepare GitHub Pages.
+      - uses: actions/configure-pages@v5
+
+      # Package the site/ folder (the website plus the fresh data file).
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      # Publish the package. This step produces the live URL.
+      - id: deployment
+        uses: actions/deploy-pages@v4

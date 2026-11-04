@@ -1,0 +1,1014 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SirenSim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* =====================================================================
+   STYLES
+   Layout idea: a "control room" dashboard. From top to bottom:
+   brand bar, hero (title + season controls + progress meter), then one
+   tabbed panel (Ladder odds, Heatmap, Club, Models, Simulator, Tools).
+
+   COLOURS AND FONTS live in the variables just below (--ground, --accent,
+   and so on). To re-theme the whole site, change them here and nowhere else.
+   The page is dark by default and switches to a light version when the
+   visitor's device is set to light mode.
+   ===================================================================== */
+:root{
+  --ground:#05070D; --panel:#0B1020; --panel-2:#121A33; --line:#1D2744;
+  --ink:#E8ECF7; --ink-2:#97A1BD; --accent:#4DB2FF; --accent-ink:#04121F;
+  --good:#3DDC97; --warn:#F5B94A; --bad:#FF6B6B;
+  --display:'Barlow Condensed','Arial Narrow',sans-serif;
+  --body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+/* Light mode: same variable names, different colours. The first block applies
+   when the device prefers light; the second block (data-theme) lets a
+   "light" setting force it. Dark values are the defaults in :root above. */
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --ground:#F2F5FB; --panel:#FFFFFF; --panel-2:#E9EEF8; --line:#D3DAEA;
+    --ink:#0B1226; --ink-2:#4F5B7B; --accent:#0A6FD1; --accent-ink:#FFFFFF;
+    --good:#0E8A57; --warn:#A56A00; --bad:#C93A3A; color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --ground:#F2F5FB; --panel:#FFFFFF; --panel-2:#E9EEF8; --line:#D3DAEA;
+  --ink:#0B1226; --ink-2:#4F5B7B; --accent:#0A6FD1; --accent-ink:#FFFFFF;
+  --good:#0E8A57; --warn:#A56A00; --bad:#C93A3A; color-scheme:light;
+}
+*{box-sizing:border-box}
+/* Anything with the HTML "hidden" attribute is fully removed from the page (used for tabs). */
+[hidden]{display:none!important}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font:15px/1.5 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 56px;
+}
+.wrap{max-width:1160px;margin:0 auto}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button,select,input{font:inherit;color:inherit}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---- Brand bar: logo on the left, status text on the right ---- */
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0;border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:10px;font:700 28px/1 var(--display);letter-spacing:.02em}
+.logo b{color:var(--accent);font-weight:700}
+.logo svg{width:26px;height:26px;flex:none}
+.status{font:500 12px/1.3 var(--mono);color:var(--ink-2);text-align:right;letter-spacing:.04em;text-transform:uppercase}
+
+/* ---- Hero: big headline, then the card with the rounds slider, seasons picker and progress meter ---- */
+.hero{padding:40px 0 24px;display:grid;gap:18px}
+.eyebrow{margin:0;font:500 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+h1{margin:0;font:700 clamp(44px,8vw,88px)/.92 var(--display);letter-spacing:-.01em;max-width:13ch;text-wrap:balance}
+.lede{margin:0;max-width:62ch;color:var(--ink-2);font-size:17px}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.field{display:grid;gap:8px;min-width:0}
+.field label,.lab{font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+.field output{font:600 22px/1 var(--display);color:var(--ink);letter-spacing:.02em}
+.labrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px;margin:0}
+select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:9px 10px;width:100%;min-width:0}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:10px 16px;font:600 15px var(--body);cursor:pointer;letter-spacing:.01em}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.ghost:hover{background:var(--panel-2)}
+.meter-box{display:grid;gap:8px}
+.meter{height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--accent);transition:width .12s linear}
+.simline{display:flex;justify-content:space-between;gap:8px;font:500 12px var(--mono);color:var(--ink-2);letter-spacing:.04em;text-transform:uppercase}
+.simline span:last-child{color:var(--ink)}
+
+/* ---- Main panel and its tab strip. .view is one tab's content; only one is visible at a time ---- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-top:8px;min-width:0}
+.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);padding:0 12px}
+.tab{flex:none;padding:14px 12px 12px;font:600 17px var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+.view{padding:20px;display:grid;gap:18px;min-width:0}
+.vhead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.vhead h2{margin:0;font:700 30px/1 var(--display);letter-spacing:.01em}
+.vhead p{margin:4px 0 0;color:var(--ink-2);max-width:70ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:5px 10px;color:var(--ink-2);background:var(--panel-2)}
+.chip.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
+.chip.live{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,var(--line))}
+/* While a new batch of seasons is running the old numbers fade slightly, so people know they are about to change. */
+.busy .results{opacity:.55;transition:opacity .15s}
+.scroll{overflow-x:auto;min-width:0}
+
+/* ---- Tables. .tbl styles the ladder and the model leaderboard.
+   .pc cells draw a faint bar behind the number (width comes from the --w variable set in JS) ---- */
+.tbl{width:100%;border-collapse:collapse;min-width:780px}
+.tbl.narrow{min-width:560px}
+.tbl th{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl th button{background:none;border:0;padding:0;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;cursor:pointer}
+.tbl th button:hover,.tbl th[aria-sort] button{color:var(--ink)}
+.tbl th:nth-child(2),.tbl td:nth-child(2){text-align:left}
+.tbl th:first-child{text-align:left}
+.tbl td{padding:8px 10px;text-align:right;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent);font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13.5px;white-space:nowrap}
+.tbl td:first-child{text-align:left;color:var(--ink-2);width:36px}
+.tbl tbody tr:hover{background:var(--panel-2)}
+.tbl tr.cut td{border-bottom:1px dashed var(--accent)}
+.tbl .club{font:600 17px var(--display);letter-spacing:.03em;color:var(--ink);background:none;border:0;padding:0;cursor:pointer;text-align:left;display:inline-flex;gap:10px;align-items:baseline}
+.tbl .club small{font:500 11px var(--mono);color:var(--ink-2);letter-spacing:.06em}
+.tbl .club:hover{color:var(--accent)}
+.tbl .mname{font:600 16px var(--display);letter-spacing:.03em;color:var(--ink)}
+.pc{position:relative}
+.pc::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:var(--w,0%);background:color-mix(in srgb,var(--accent) 24%,transparent);border-radius:2px}
+.pc span{position:relative}
+.pc.hot span{color:var(--ink);font-weight:500}
+
+/* ---- Heatmap: one coloured cell per club per ladder position. Colour strength is set in JS ---- */
+.heat{border-collapse:separate;border-spacing:2px;min-width:760px;width:100%}
+.heat th{font:500 11px var(--mono);color:var(--ink-2);padding:4px 2px;text-align:center;letter-spacing:.04em}
+.heat th.rowh{text-align:left;padding-right:10px;white-space:nowrap;font:600 15px var(--display);letter-spacing:.04em;color:var(--ink)}
+.heat td{height:30px;text-align:center;font:500 11.5px var(--mono);border-radius:3px;background:var(--panel-2);color:var(--ink-2);min-width:32px}
+.heat td.f4{box-shadow:inset 2px 0 0 var(--accent)}
+.heat td.f8{box-shadow:inset 2px 0 0 color-mix(in srgb,var(--accent) 55%,transparent)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font:500 11px var(--mono);color:var(--ink-2);letter-spacing:.06em;text-transform:uppercase}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+
+/* ---- Club tab: header, stat tiles, finishing-position chart and the what-if fixture list ---- */
+.clubtop{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,260px);gap:16px;align-items:end}
+@media (max-width:640px){.clubtop{grid-template-columns:1fr}}
+.cname{font:700 clamp(36px,6vw,56px)/.95 var(--display);margin:0;letter-spacing:.01em}
+.cname small{display:block;font:500 12px var(--mono);letter-spacing:.1em;color:var(--ink-2);margin-top:8px;text-transform:uppercase}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.tile{background:var(--panel-2);border-radius:8px;padding:12px 14px;display:grid;gap:4px;min-width:0}
+.tile .k{font:500 11px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+.tile .v{font:700 34px/1 var(--display);letter-spacing:.01em}
+.tile .s{font:500 12px var(--mono);color:var(--ink-2)}
+.chart{width:100%;height:auto;display:block}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .tick{fill:var(--ink-2);font:500 11px var(--mono)}
+.chart .bar-in{fill:var(--accent)}
+.chart .bar-out{fill:var(--ink-2);opacity:.5}
+.sub{margin:0;font:600 20px var(--display);letter-spacing:.06em;text-transform:uppercase}
+.fixtures{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
+.fx{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:center;background:var(--panel-2);border-radius:8px;padding:10px 12px}
+.fx .rd{font:500 11px var(--mono);color:var(--ink-2);letter-spacing:.06em;text-transform:uppercase}
+.fx .opp{font:600 17px var(--display);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fx .opp small{font:500 11px var(--mono);color:var(--ink-2);margin-left:6px}
+.seg{grid-column:1 / -1;display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px;align-items:center}
+.seg .wp{font:500 12px var(--mono);color:var(--ink-2);padding-right:6px}
+.seg button{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:5px 6px;font:500 12px var(--mono);cursor:pointer;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+/* ---- Models tab: the tips grid. The first column stays visible while you scroll sideways ---- */
+.pickers{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.pickers .field{min-width:150px}
+.tips{border-collapse:separate;border-spacing:2px;min-width:640px}
+.tips th{font:500 11px/1.25 var(--mono);color:var(--ink-2);padding:6px 4px;text-align:center;vertical-align:bottom;max-width:96px;overflow-wrap:anywhere}
+.tips th.mh,.tips td.mh{text-align:left;position:sticky;left:0;background:var(--panel);z-index:1;min-width:132px}
+.tips td{padding:6px 6px;text-align:center;font:500 12.5px var(--mono);border-radius:3px;background:var(--panel-2);white-space:nowrap}
+.tips td.ok{background:color-mix(in srgb,var(--good) 26%,var(--panel-2))}
+.tips td.no{background:color-mix(in srgb,var(--bad) 26%,var(--panel-2))}
+.tips td.empty{color:var(--ink-2);opacity:.55}
+.tips td.mh{background:var(--panel)}
+.tips td.mh .vs{font:600 16px var(--display);letter-spacing:.03em}
+.tips td.mh small{display:block;font:500 11px var(--mono);color:var(--ink-2)}
+.tips th.sim,.tips td.sim{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 50%,transparent)}
+
+/* ---- Simulator tab: one rating slider per club ---- */
+.sliders{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px 22px}
+.sl{display:grid;gap:2px}
+.sl .labrow span:first-child{font:600 16px var(--display);letter-spacing:.04em}
+.sl .labrow output{font:500 13px var(--mono)}
+
+/* ---- Tools tab and page footer ---- */
+.toolgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;align-items:end}
+.big{font:700 clamp(56px,10vw,104px)/.9 var(--display);letter-spacing:-.01em}
+.hist{display:flex;flex-wrap:wrap;gap:8px}
+.note{color:var(--ink-2);font-size:14px;max-width:80ch;margin:0}
+.foot{margin-top:28px;display:grid;gap:10px;color:var(--ink-2);font-size:13.5px}
+.foot p{margin:0;max-width:90ch}
+.foot b{color:var(--ink);font-weight:600}
+@media (prefers-reduced-motion:reduce){.meter i,.busy .results{transition:none}}
+</style>
+</head>
+<body>
+<!-- Everything on the page sits inside .wrap, which limits the width and centres it. -->
+<div class="wrap">
+  <!-- BRAND BAR: logo (an SVG drawn inline) and the status text. The status text is filled in by renderHeader() in the script. -->
+  <header class="top">
+    <div class="logo">
+      <svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="3" fill="var(--accent)"/><path d="M5 13a8 8 0 0 1 16 0M1.5 13a11.5 11.5 0 0 1 23 0" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Siren<b>Sim</b></span>
+    </div>
+    <div class="status" id="hdrStatus">Loading season data</div>
+  </header>
+
+  <!-- HERO: headline plus the control card.
+         #round       = "rounds played" slider (rewinds the season)
+         #simsN       = how many seasons to simulate per run
+         #simCount / #meterFill = progress text and bar while simulating
+         #runBtn      = run the simulation again with a fresh random seed -->
+  <section class="hero">
+    <p class="eyebrow">AFL season simulator</p>
+    <h1>See your club's real chances of the flag.</h1>
+    <p class="lede">The rest of the season is played out thousands of times, with the finals included. Rewind to any round, change a club's strength or force a result, and watch the odds for the top four, the finals and the premiership move.</p>
+    <div class="controls">
+      <div class="field">
+        <div class="labrow"><label for="round">Rounds played</label><output id="roundOut" for="round">&ndash;</output></div>
+        <input type="range" id="round" min="0" max="23" value="12">
+      </div>
+      <div class="field">
+        <label for="simsN">Seasons per run</label>
+        <select id="simsN">
+          <option value="1000">1,000</option>
+          <option value="10000" selected>10,000</option>
+          <option value="50000">50,000</option>
+        </select>
+      </div>
+      <div class="meter-box">
+        <div class="simline"><span>Simulating seasons</span><span id="simCount">0 / 10,000</span></div>
+        <div class="meter"><i id="meterFill"></i></div>
+      </div>
+      <div class="field"><button class="btn" id="runBtn" type="button">Run again</button></div>
+    </div>
+  </section>
+
+  <!-- MAIN PANEL: the tab links, then one <section class="view"> per tab. showTab() in the script shows the one matching the URL #hash. -->
+  <main class="panel">
+    <nav class="tabs" aria-label="Views">
+      <a class="tab" href="#ladder" data-tab="ladder">Ladder odds</a>
+      <a class="tab" href="#heatmap" data-tab="heatmap">Heatmap</a>
+      <a class="tab" href="#club" data-tab="club">Club</a>
+      <a class="tab" href="#models" data-tab="models">Models</a>
+      <a class="tab" href="#simulator" data-tab="simulator">Simulator</a>
+      <a class="tab" href="#tools" data-tab="tools">Tools</a>
+    </nav>
+
+    <!-- TAB 1, LADDER ODDS: current ladder plus each club's chance of top 4, top 8, Grand Final, flag and wooden spoon. The table itself is built by renderLadder(). -->
+    <section class="view" id="view-ladder">
+      <div class="vhead">
+        <div>
+          <h2>Ladder and finishing odds</h2>
+          <p>Current ladder after the rounds played, with each club's chance of every finals outcome across all simulated seasons. Select a club for the full breakdown.</p>
+        </div>
+        <div class="chips"><span class="chip warn" id="dataChip">Example season</span><span class="chip" id="whatifChip" hidden></span></div>
+      </div>
+      <div class="scroll results" id="ladderBox"></div>
+    </section>
+
+    <!-- TAB 2, HEATMAP: how likely each club is to finish in each ladder position. Built by renderHeat(). -->
+    <section class="view" id="view-heatmap" hidden>
+      <div class="vhead">
+        <div>
+          <h2>Finishing position heatmap</h2>
+          <p>Each row shows how often a club ends the home and away season in each ladder position. Brighter cells are more likely. Lines mark the top four and top eight.</p>
+        </div>
+      </div>
+      <div class="scroll results" id="heatBox"></div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>More likely</span><span><i style="background:var(--panel-2)"></i>Under 0.5%</span><span>Left edge of column 5 and 9: finals cut-offs</span></div>
+    </section>
+
+    <!-- TAB 3, CLUB: deep dive on one club, including the what-if buttons that force a result. Built by renderClub(). -->
+    <section class="view" id="view-club" hidden>
+      <div class="clubtop">
+        <h2 class="cname" id="cName"></h2>
+        <div class="field"><label for="clubSel">Club</label><select id="clubSel"></select></div>
+      </div>
+      <div class="tiles results" id="cTiles"></div>
+      <div class="results">
+        <h3 class="sub">Where they finish</h3>
+        <div id="cChart"></div>
+      </div>
+      <div>
+        <div class="vhead"><h3 class="sub">What if: remaining games</h3><div class="chips"><button class="btn ghost" id="clearWhatif" type="button">Clear what-ifs</button></div></div>
+        <p class="note">Force a win or loss and the season re-runs around it. The percentage is the chance of a win before any forcing.</p>
+      </div>
+      <ul class="fixtures" id="fixtures"></ul>
+    </section>
+
+    <!-- TAB 4, MODELS: leaderboard of prediction models and a grid of their tips for one round.
+             Only shows content when real data (with tips) has been loaded. Built by renderModels() and renderTips(). -->
+    <section class="view" id="view-models" hidden>
+      <div class="vhead">
+        <div>
+          <h2>Model tips and accuracy</h2>
+          <p>Public prediction models from the Squiggle community, scored on the games played so far. Move the rounds-played slider to see how each model had done at any point in the season.</p>
+        </div>
+      </div>
+      <p class="note" id="modelsEmpty" hidden>Model tips show up once real data is loaded. This copy is running on example data, so there are no tips to show. Follow the README to turn on the daily data refresh.</p>
+      <div id="modelsBody" hidden>
+        <div>
+          <h3 class="sub">Accuracy so far</h3>
+          <p class="note" id="lbNote"></p>
+        </div>
+        <div class="scroll" id="leaderBox"></div>
+        <div class="vhead">
+          <h3 class="sub">Tips by round</h3>
+          <div class="pickers">
+            <div class="field"><label for="tipRound">Round</label><select id="tipRound"></select></div>
+            <div class="field"><label for="tipShow">Models shown</label>
+              <select id="tipShow"><option value="6">Top 6 by accuracy</option><option value="12">Top 12 by accuracy</option><option value="all">All models</option></select>
+            </div>
+          </div>
+        </div>
+        <div class="scroll" id="tipsBox"></div>
+        <p class="note">Each cell is the team a model tipped and its chance of winning. Green was right, red was wrong, grey is a game not yet played at this point. Consensus averages every model's chance for the home side. The SirenSim column uses this site's own ratings, which are fitted on results so far, so for past rounds it is in-sample and looks better than it would have in real time.</p>
+      </div>
+    </section>
+
+    <!-- TAB 5, SIMULATOR: sliders for every club's strength, home ground advantage and how random games are. -->
+    <section class="view" id="view-simulator" hidden>
+      <div class="vhead">
+        <div>
+          <h2>Set how strong every club is</h2>
+          <p>Ratings are in points per game against an average side. Changes apply to games still to be played, then the season re-runs.</p>
+        </div>
+        <div class="chips"><button class="btn ghost" id="resetRatings" type="button">Reset ratings</button></div>
+      </div>
+      <div class="sliders" id="sliders"></div>
+      <div class="sliders">
+        <div class="sl"><div class="labrow"><span>Home ground advantage</span><output id="hgaOut"></output></div><input type="range" id="hga" min="0" max="15" step="1" value="7"></div>
+        <div class="sl"><div class="labrow"><span>Game volatility</span><output id="sdOut"></output></div><input type="range" id="sd" min="28" max="46" step="1" value="36"></div>
+      </div>
+      <p class="note" id="simNote">Higher volatility means more upsets. Home ground advantage is the extra margin the home side starts with. Finals are played at neutral venues.</p>
+    </section>
+
+    <!-- TAB 6, TOOLS: "how many seasons until..." keeps simulating until a chosen club does something. -->
+    <section class="view" id="view-tools" hidden>
+      <div class="vhead">
+        <div>
+          <h2>How many seasons until&hellip;</h2>
+          <p>Keep simulating seasons one after another until your chosen club does the thing. The answer is a count, so it shows how rare an outcome really is.</p>
+        </div>
+      </div>
+      <div class="toolgrid">
+        <div class="field"><label for="untilClub">Club</label><select id="untilClub"></select></div>
+        <div class="field"><label for="untilEvent">Until they</label>
+          <select id="untilEvent">
+            <option value="flag">win the premiership</option>
+            <option value="gf">reach the Grand Final</option>
+            <option value="top4">finish top four</option>
+            <option value="top8">make the finals</option>
+            <option value="spoon">finish last</option>
+          </select>
+        </div>
+        <div class="field"><button class="btn" id="untilGo" type="button">Start simulating</button></div>
+      </div>
+      <div>
+        <div class="big num" id="untilBig">&ndash;</div>
+        <p class="note" id="untilText">Pick a club and an outcome, then start.</p>
+      </div>
+      <div class="hist" id="untilHist"></div>
+    </section>
+  </main>
+
+  <!-- FOOTER: a short explanation of the maths, and a note about where the data comes from (#dataNote is filled in by setupUI()). -->
+  <footer class="foot">
+    <p><b>How it works.</b> Each game starts from the rating gap between the two clubs plus a home ground edge, then adds random noise to produce a final margin and scores. Wins are worth 4 premiership points, draws 2, and the ladder is ordered by points then percentage. The top eight play the finals series, simulated at neutral venues.</p>
+    <p id="dataNote"></p>
+  </footer>
+</div>
+
+<!-- ALL THE LOGIC. Plain JavaScript, no libraries and no build step: edit this file and refresh the browser. -->
+<script>
+/*ENGINE*/
+// =====================================================================
+// HOW THIS SCRIPT IS ORGANISED
+//   1. ENGINE (from here to the end-of-engine comment): the data and the
+//      simulation maths. It never touches the page, so it can be tested alone.
+//   2. UI: functions that draw tables and charts, and react to clicks.
+//   3. BOOT (very bottom): loads data/season.json, then starts everything.
+//
+// WORDS USED IN THE CODE
+//   ladder   = the league table            flag = the premiership
+//   rating   = how many points per game a club is better (+) or worse (-)
+//              than an average club
+//   margin   = home team score minus away team score
+//   what-if  = a result the user forced by hand on the Club tab
+// =====================================================================
+// Number of teams in the competition.
+const NT=18;
+// The 18 clubs, in the same order as Squiggle's team ids 1 to 18 (array position = id minus 1).
+//   c = three-letter code   n = display name   r = example starting rating
+// The r values are only used for the example season. With real data, ratings are fitted from results.
+const TEAMS=[
+ {c:'ADE',n:'Adelaide',r:5},{c:'BRL',n:'Brisbane Lions',r:14},{c:'CAR',n:'Carlton',r:0},{c:'COL',n:'Collingwood',r:7},
+ {c:'ESS',n:'Essendon',r:-9},{c:'FRE',n:'Fremantle',r:6},{c:'GEE',n:'Geelong',r:12},{c:'GCS',n:'Gold Coast',r:3},
+ {c:'GWS',n:'GWS Giants',r:9},{c:'HAW',n:'Hawthorn',r:5},{c:'MEL',n:'Melbourne',r:-3},{c:'NTH',n:'North Melbourne',r:-2},
+ {c:'PTA',n:'Port Adelaide',r:0},{c:'RIC',n:'Richmond',r:-17},{c:'STK',n:'St Kilda',r:-7},{c:'SYD',n:'Sydney',r:8},
+ {c:'WCE',n:'West Coast',r:-22},{c:'WBD',n:'Western Bulldogs',r:2}
+];
+// Just the example ratings as a plain list, so "Reset ratings" can restore them.
+const DEF_R=TEAMS.map(t=>t.r);
+// Seeded random number generator. Give it the same seed and it produces the same
+// sequence every time, which is how the example season stays identical on every visit.
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+// Turns uniform random numbers into "bell curve" numbers (mean 0, spread 1)
+// using the Box-Muller method. Used to add realistic randomness to each game.
+function makeRandn(rand){let spare=null;return function(){if(spare!==null){const s=spare;spare=null;return s}let u=0;while(u===0)u=rand();const v=rand();const m=Math.sqrt(-2*Math.log(u));spare=m*Math.sin(2*Math.PI*v);return m*Math.cos(2*Math.PI*v)}}
+// Randomly reorders an array in place (Fisher-Yates shuffle).
+function shuffle(a,rand){for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));const t=a[i];a[i]=a[j];a[j]=t}return a}
+
+// SEASON DATA
+// Games are stored as parallel arrays: game number g has its home team in GH[g],
+// away team in GA[g], round in GR[g], and so on. This is much faster than a list of
+// objects, which matters because we replay the season thousands of times.
+//   GH / GA  home and away team index (0 to 17)
+//   GR       round index (0 = first round of the season)
+//   HAS      1 if the game has a real result, 0 if it is still to be played
+//   AM / AT  actual margin (home minus away) and actual total score
+//   GID      Squiggle's id for the game      GDATE  kickoff date text
+//   ROUNDS   real round numbers, e.g. [1,2,3...]      NR  number of rounds
+let NG=0,NR=0,GH,GA,GR,HAS,AM,AT,GID,GDATE,ROUNDS=[],gidx=new Map();
+// The single object holding everything the user can change. Nothing else is global state.
+//   rt     rating for each club          hga   home ground advantage (points)
+//   sd     how random a game is (spread of the margin, in points)
+//   R      how many rounds count as "played" (the slider)
+//   n      seasons to simulate per run   forced  what-if results (0 none, 1 home win, -1 away win)
+//   club   club currently shown on the Club tab    agg  results of the latest simulation run
+//   real   true when real data loaded     manual  true once the user edits a rating by hand
+const state={rt:new Float64Array(NT),hga:7,sd:36,R:0,n:10000,forced:null,club:1,agg:null,real:false,manual:false,meta:null,tipRound:0,tipShow:'6',lbSort:'acc'};
+// Creates empty arrays big enough for n games. Called once when the season is built.
+function alloc(n){
+  NG=n;GH=new Int8Array(n);GA=new Int8Array(n);GR=new Int8Array(n);HAS=new Uint8Array(n);
+  AM=new Float64Array(n);AT=new Float64Array(n);GID=new Array(n).fill(0);GDATE=new Array(n).fill('');
+  state.forced=new Int8Array(n);gidx=new Map();
+}
+// True if game g already has a real result AND falls inside the rounds-played slider.
+const played=g=>HAS[g]===1&&GR[g]<state.R;
+
+// EXAMPLE SEASON
+// Used when data/season.json is missing (for example when opening the file straight from disk).
+// It builds a made-up fixture where every club plays 23 games, then plays it once with a fixed seed.
+// It is NOT real AFL data and the page labels it "Example season".
+function buildExample(){
+  const rand=mulberry32(20261104);
+  const rot=[];for(let i=1;i<NT;i++)rot.push(i);
+  const base=[];
+  for(let r=0;r<NT-1;r++){
+    const list=[0].concat(rot);const pairs=[];
+    for(let i=0;i<NT/2;i++){let a=list[i],b=list[NT-1-i];if((r+i)%2===1){const t=a;a=b;b=t}pairs.push([a,b])}
+    base.push(pairs);rot.unshift(rot.pop());
+  }
+  const idx=[];for(let i=0;i<NT-1;i++)idx.push(i);
+  const extra=shuffle(idx,rand).slice(0,6).map(i=>base[i].map(p=>[p[1],p[0]]));
+  const rounds=base.concat(extra);
+  shuffle(rounds,rand);
+  alloc(rounds.length*(NT/2));NR=rounds.length;ROUNDS=rounds.map((_,i)=>i+1);
+  const rn=makeRandn(mulberry32(77));
+  let g=0;
+  rounds.forEach((pairs,r)=>pairs.forEach(p=>{
+    GH[g]=p[0];GA[g]=p[1];GR[g]=r;HAS[g]=1;
+    AM[g]=Math.round(DEF_R[p[0]]-DEF_R[p[1]]+7+36*rn());
+    AT[g]=Math.max(100,Math.round(168+16*rn()));
+    g++;
+  }));
+  state.real=false;state.meta=null;state.R=12;state.rt=Float64Array.from(DEF_R);state.manual=false;
+}
+
+// REAL SEASON
+// Builds the arrays from data/season.json, which scripts/fetch-data.mjs writes from the Squiggle API.
+// Steps: sort games by round and date, convert Squiggle team ids (1-18) to array positions (0-17),
+// record scores for finished games, work out how many rounds are complete, then fit ratings.
+function buildReal(data){
+  const games=data.games.slice().sort((a,b)=>a.round-b.round||(a.date<b.date?-1:a.date>b.date?1:0)||a.id-b.id);
+  ROUNDS=[...new Set(games.map(g=>g.round))].sort((a,b)=>a-b);NR=ROUNDS.length;
+  const ri=new Map(ROUNDS.map((r,i)=>[r,i]));
+  alloc(games.length);
+  let lastDone=-1;
+  games.forEach((g,k)=>{
+    if(!(g.h>=1&&g.h<=NT&&g.a>=1&&g.a<=NT))throw new Error('Unexpected team id in game '+g.id);
+    GH[k]=g.h-1;GA[k]=g.a-1;GR[k]=ri.get(g.round);GID[k]=g.id;GDATE[k]=g.date||'';gidx.set(g.id,k);
+    if(g.done&&g.hs!=null&&g.as!=null){HAS[k]=1;AM[k]=g.hs-g.as;AT[k]=g.hs+g.as;if(GR[k]>lastDone)lastDone=GR[k]}
+  });
+  state.real=true;state.meta=data.meta||{};state.R=lastDone+1;state.manual=false;
+  state.rt=fitRatings();
+}
+// RATINGS FROM RESULTS
+// Each club's rating is its average winning margin, adjusted for how strong its opponents were
+// and for home ground advantage. We repeat the calculation 80 times so the numbers settle
+// (strong opponents make a club's margins count for more). The "+K" below shrinks ratings
+// toward zero, so a club that won one game by 80 points in round 1 is not treated as a superteam.
+// This is a first-pass approach; step 2 of the plan is to improve it.
+function fitRatings(){
+  const r=new Float64Array(NT),list=[];
+  for(let g=0;g<NG;g++)if(played(g))list.push(g);
+  if(!list.length)return r;
+  const K=5;
+  for(let it=0;it<80;it++){
+    const num=new Float64Array(NT),cnt=new Float64Array(NT);
+    for(const g of list){
+      const h=GH[g],a=GA[g],m=AM[g]-state.hga;
+      num[h]+=m+r[a];cnt[h]++;num[a]+=-m+r[h];cnt[a]++;
+    }
+    for(let i=0;i<NT;i++)r[i]=num[i]/(cnt[i]+K);
+  }
+  for(let i=0;i<NT;i++)r[i]=Math.max(-30,Math.min(30,r[i]));
+  return r;
+}
+
+// THE SIMULATION
+// One "season" = play every unplayed game with random results, build the ladder,
+// then play the finals. We do this thousands of times and count what happens.
+// Scratch space reused by every simulated season (avoids creating new arrays 10,000 times). pts = premiership points, w = wins, pf/pa = points for/against, order = clubs sorted by ladder position.
+const S={pts:new Int16Array(NT),w:new Int16Array(NT),pf:new Float64Array(NT),pa:new Float64Array(NT),key:new Float64Array(NT),order:new Int8Array(NT),gfA:0,gfB:0};
+// Takes a snapshot of the current settings (ratings, slider, what-ifs) so changing a slider mid-run cannot corrupt a run in progress.
+function makeCtx(){
+  const rand=mulberry32((Math.random()*4294967296)>>>0);
+  return{rt:Float64Array.from(state.rt),hga:state.hga,sd:state.sd,R:state.R,forced:Int8Array.from(state.forced),randn:makeRandn(rand)};
+}
+// Simulates ONE full season and returns the index of the premiership winner.
+// It also leaves the final ladder in S.order and the Grand Finalists in S.gfA / S.gfB.
+function playSeason(c){
+  const rt=c.rt,rn=c.randn,sd=c.sd;
+    // Start every club on zero for this season.
+  S.pts.fill(0);S.w.fill(0);S.pf.fill(0);S.pa.fill(0);
+  for(let g=0;g<NG;g++){
+        // Go through every game. h = home club, a = away club, m = margin (home minus away), t = total score.
+    const h=GH[g],a=GA[g];let m,t;
+        // Already played (and inside the slider)? Use the real score.
+    if(HAS[g]===1&&GR[g]<c.R){m=AM[g];t=AT[g]}
+    else{
+            // Not played yet: expected margin = rating gap + home advantage, then add a random "bell curve"
+            // amount so upsets can happen. A bigger sd means more upsets.
+      m=Math.round(rt[h]-rt[a]+c.hga+sd*rn());
+            // Total points scored in the game, randomly around 168 (never below 100).
+      t=168+16*rn();if(t<100)t=100;
+            // If the user forced a result on the Club tab, flip the margin if needed so the chosen team wins.
+      const f=c.forced[g];
+      if(f===1&&m<=0)m=Math.abs(m)+1;else if(f===-1&&m>=0)m=-Math.abs(m)-1;
+    }
+        // Split the total into home and away scores, and add them to each club's points for and against (used for percentage).
+    const sh=(t+m)/2,sa=(t-m)/2;
+    S.pf[h]+=sh;S.pa[h]+=sa;S.pf[a]+=sa;S.pa[a]+=sh;
+        // A win is worth 4 premiership points and a draw 2 points each.
+    if(m>0){S.pts[h]+=4;S.w[h]++}else if(m<0){S.pts[a]+=4;S.w[a]++}else{S.pts[h]+=2;S.pts[a]+=2}
+  }
+    // Build the ladder: sort clubs by premiership points, then by percentage
+    // (points for divided by points against) as the tie-breaker. The sort key packs both into one number.
+  for(let i=0;i<NT;i++){S.key[i]=S.pts[i]*1000+(S.pa[i]>0?S.pf[i]/S.pa[i]*100:0);S.order[i]=i}
+  for(let i=1;i<NT;i++){const v=S.order[i],kv=S.key[v];let j=i-1;while(j>=0&&S.key[S.order[j]]<kv){S.order[j+1]=S.order[j];j--}S.order[j+1]=v}
+    // FINALS: o[0] is the top-ranked club, o[7] is eighth. The top 8 play, simulated at neutral venues.
+    // win(a,b) plays one final: the stronger club is more likely to win but not certain.
+  const o=S.order;
+  const win=(a,b)=>(rt[a]-rt[b]+sd*rn())>=0?a:b;
+    // Week 1: qualifying finals (1v4 and 2v3, losers get a second chance) and elimination finals (5v8 and 6v7, losers are out).
+  const q1w=win(o[0],o[3]),q1l=q1w===o[0]?o[3]:o[0];
+  const q2w=win(o[1],o[2]),q2l=q2w===o[1]?o[2]:o[1];
+  const e1w=win(o[4],o[7]),e2w=win(o[5],o[6]);
+    // Week 2: semi finals. Qualifying-final losers play elimination-final winners.
+  const s1w=win(q1l,e1w),s2w=win(q2l,e2w);
+    // Week 3: preliminary finals. Qualifying-final winners play the semi-final winners. Then the Grand Final.
+  const p1w=win(q1w,s2w),p2w=win(q2w,s1w);
+  S.gfA=p1w;S.gfB=p2w;
+  return win(p1w,p2w);
+}
+// Creates the tally sheet for a batch of seasons: for each club, how many times it finished in each position, won the flag, reached the Grand Final, plus total wins.
+function newAgg(){return{pos:new Float64Array(NT*NT),prem:new Float64Array(NT),gf:new Float64Array(NT),wins:new Float64Array(NT),n:0}}
+// Simulates one season and adds the outcome to the tally sheet.
+function oneSeason(c,agg){
+  const champ=playSeason(c);
+  for(let p=0;p<NT;p++)agg.pos[S.order[p]*NT+p]++;
+  agg.prem[champ]++;agg.gf[S.gfA]++;agg.gf[S.gfB]++;
+  for(let i=0;i<NT;i++)agg.wins[i]+=S.w[i];
+  agg.n++;
+}
+// Approximate error function. Only exists to build Phi below.
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y}
+// Probability that a bell-curve number is below z. Turns "expected margin / spread" into a win probability.
+function Phi(z){return 0.5*(1+erf(z/Math.SQRT2))}
+// Chance (0 to 1) that home club h beats away club a, using current ratings. Used for the win % on the Club tab and the SirenSim column on the Models tab.
+function winProb(h,a){return Phi((state.rt[h]-state.rt[a]+state.hga)/state.sd)}
+
+// MODEL TIPS
+// Squiggle publishes predictions from many community models. For each game we keep a list of tips.
+// Each tip is a small object with short field names (made by scripts/fetch-data.mjs):
+//   g = game id   s = model id   t = team id tipped to win
+//   p = model's chance the HOME team wins (0-100)   m = predicted home margin
+const M={has:false,sources:[],byGame:new Map()};
+// Files each tip under its game so we can look tips up quickly. Sets M.has to false when there are no tips (example mode).
+function setupModels(data){
+  M.byGame=new Map();M.sources=(data.sources||[]).slice();
+  for(const t of (data.tips||[])){
+    const gi=gidx.get(t.g);if(gi===undefined)continue;
+    let arr=M.byGame.get(gi);if(!arr){arr=[];M.byGame.set(gi,arr)}
+    arr.push(t);
+  }
+  M.has=M.byGame.size>0;
+}
+// Looks up a model's display name from its id.
+function srcName(id){const s=M.sources.find(x=>x.id===id);return s?s.name:'Model '+id}
+// Scores every model on the games played so far (it respects the rounds-played slider):
+//   ok / acc  how many winners it picked correctly, and that as a percentage (draws count as correct)
+//   bits      rewards confident right tips and punishes confident wrong ones (higher is better)
+//   mae       average number of points its predicted margin missed by (lower is better)
+function modelStats(){
+  const st=new Map();
+  M.byGame.forEach((arr,gi)=>{
+    if(!played(gi))return;
+    const m=AM[gi];
+    for(const t of arr){
+      let s=st.get(t.s);
+      if(!s){s={id:t.s,n:0,ok:0,bn:0,bits:0,en:0,err:0};st.set(t.s,s)}
+      const homeTip=(t.t-1)===GH[gi];
+      s.n++;if(m===0||(m>0)===homeTip)s.ok++;
+      if(t.p!=null){
+        const p=Math.min(0.999,Math.max(0.001,t.p/100));
+        s.bn++;s.bits+=m>0?1+Math.log2(p):m<0?1+Math.log2(1-p):1+0.5*Math.log2(p*(1-p));
+      }
+      if(t.m!=null){s.en++;s.err+=Math.abs(t.m-m)}
+    }
+  });
+  return [...st.values()].map(s=>({id:s.id,name:srcName(s.id),n:s.n,ok:s.ok,acc:s.ok/s.n*100,bits:s.bn?s.bits/s.bn:null,mae:s.en?s.err/s.en:null}));
+}
+// ===== end of the engine: nothing above this line touches the web page =====
+/*END*/
+
+/* =====================================================================
+   UI: everything from here down draws things on the page or reacts to clicks.
+   Most render functions build an HTML string and put it into a container with
+   innerHTML. renderAll() calls all of them after a simulation finishes.
+   ===================================================================== */
+// Short helper: $("#id") finds one element on the page.
+const $=s=>document.querySelector(s);
+// Tab names. Each matches a link href (#ladder, #heatmap...) and a section id (view-ladder, view-heatmap...).
+const TABS=['ladder','heatmap','club','models','simulator','tools'];
+// Formats a percentage for display: one decimal place, "<0.1" for tiny values, and a dash for zero.
+const f1=p=>p>=99.95?'100':p>=0.05?p.toFixed(1):p>0?'<0.1':'–';
+// Formats a rating with a plus or minus sign, for example +7 or -12.
+const sgn=v=>{const r=Math.round(v);return (r>0?'+':r<0?'−':'')+Math.abs(r)};
+// Short club code from an index, for example 2 becomes "CAR".
+const code=i=>TEAMS[i].c;
+// Turns a round index into the real round number (index 0 is usually Round 1).
+const rl=ri=>ROUNDS[ri];
+// Percentage chance that club i finishes in ladder position p (0 = first), from the latest simulation.
+function pp(i,p){return state.agg.pos[i*NT+p]/state.agg.n*100}
+// Works out the headline numbers for club i (flag %, Grand Final %, top 4 %, top 8 %, wooden spoon %, average finish, projected wins).
+function derive(i){
+  let top4=0,top8=0,avg=0;
+  for(let p=0;p<NT;p++){const v=pp(i,p);if(p<4)top4+=v;if(p<8)top8+=v;avg+=v*(p+1)/100}
+  return{prem:state.agg.prem[i]/state.agg.n*100,gf:state.agg.gf[i]/state.agg.n*100,top4,top8,spoon:pp(i,NT-1),avg,wins:state.agg.wins[i]/state.agg.n};
+}
+// The real ladder after the rounds played so far (not simulated): wins, losses, draws, points and percentage.
+function actualLadder(){
+  const t=TEAMS.map((_,i)=>({i,w:0,l:0,d:0,pts:0,pf:0,pa:0}));
+  for(let g=0;g<NG;g++){
+    if(!played(g))continue;
+    const h=t[GH[g]],a=t[GA[g]],m=AM[g],T=AT[g],sh=(T+m)/2,sa=(T-m)/2;
+    h.pf+=sh;h.pa+=sa;a.pf+=sa;a.pa+=sh;
+    if(m>0){h.w++;a.l++;h.pts+=4}else if(m<0){a.w++;h.l++;a.pts+=4}else{h.d++;a.d++;h.pts+=2;a.pts+=2}
+  }
+  t.forEach(r=>r.pct=r.pa>0?r.pf/r.pa*100:0);
+  return t;
+}
+// Counts how many what-if results are currently forced.
+function whatifCount(){let n=0;for(let g=0;g<NG;g++)if(state.forced[g]!==0&&!played(g))n++;return n}
+// Turns "2026-03-12 19:30:00" into "Thu 12 Mar". Done manually so time zones cannot shift the day.
+function fmtDate(s){
+  const m=/(\d{4})-(\d{2})-(\d{2})/.exec(s||'');if(!m)return '';
+  return new Date(Date.UTC(+m[1],+m[2]-1,+m[3])).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
+}
+
+// RUNNING SIMULATIONS
+// run() simulates n seasons in small chunks, so the page stays responsive and the progress bar can move.
+// If a new run starts while an old one is still going, the old one stops (runId check).
+// runId identifies the current run; runTimer is the pending "debounce" timer.
+let runId=0,runTimer=0;
+// Updates the "x / y seasons" text and the progress bar.
+function setProgress(done,n){
+  $('#simCount').textContent=done.toLocaleString()+' / '+n.toLocaleString();
+  $('#meterFill').style.width=(done/n*100)+'%';
+}
+// Starts a batch of n seasons. sync=true does it all at once (used on first load so the page is filled straight away).
+function run(n,sync){
+  const id=++runId,c=makeCtx(),agg=newAgg();
+  const chunk=sync?n:Math.max(500,Math.ceil(n/25));
+  let done=0;
+  document.body.classList.add('busy');
+  const step=()=>{
+    if(id!==runId)return;
+    const end=Math.min(n,done+chunk);
+    while(done<end){oneSeason(c,agg);done++}
+    setProgress(done,n);
+    if(done<n){setTimeout(step,0)}
+    else{state.agg=agg;document.body.classList.remove('busy');renderAll()}
+  };
+  step();
+}
+// Starts a run after a short delay. If the user keeps dragging a slider, only the last move triggers a run ("debouncing").
+function queueRun(ms){clearTimeout(runTimer);runTimer=setTimeout(()=>run(state.n,false),ms==null?300:ms)}
+
+// RENDER FUNCTIONS
+// Each one rebuilds a section of the page from the current state and latest simulation.
+// Top-right status text and the "x of y rounds" label next to the slider.
+function renderHeader(){
+  const label=state.real?'Live data '+(state.meta.year||''):'Example data';
+  $('#hdrStatus').innerHTML=label+'<br>After round '+state.R+' of '+NR+' &middot; '+state.n.toLocaleString()+' seasons';
+  $('#roundOut').textContent=state.R+' of '+NR;
+}
+// Ladder tab: current ladder (real results) with the simulated odds beside each club.
+// The dashed line under 8th place marks the finals cut-off.
+function renderLadder(){
+  const rows=actualLadder().map(r=>Object.assign(r,derive(r.i)));
+  rows.sort((a,b)=>b.pts-a.pts||b.pct-a.pct||a.avg-b.avg);
+  const mx=k=>Math.max.apply(null,rows.map(r=>r[k]));
+  const m={top4:mx('top4'),top8:mx('top8'),gf:mx('gf'),prem:mx('prem'),spoon:mx('spoon')};
+  const cell=(k,r)=>'<td class="pc'+(r[k]>=25?' hot':'')+'" style="--w:'+(m[k]>0?r[k]/m[k]*100:0)+'%"><span>'+f1(r[k])+'</span></td>';
+  let h='<table class="tbl"><thead><tr><th>#</th><th>Club</th><th>W-L-D</th><th>%</th><th>Avg finish</th><th>Top 4</th><th>Top 8</th><th>Grand Final</th><th>Premiers</th><th>Last</th></tr></thead><tbody>';
+  rows.forEach((r,k)=>{
+    h+='<tr class="'+(k===7?'cut':'')+'"><td>'+(k+1)+'</td><td><button class="club" data-club="'+r.i+'">'+TEAMS[r.i].n+' <small>'+code(r.i)+'</small></button></td>'
+      +'<td>'+r.w+'-'+r.l+'-'+r.d+'</td><td>'+(r.pa>0?r.pct.toFixed(1):'–')+'</td><td>'+r.avg.toFixed(1)+'</td>'
+      +cell('top4',r)+cell('top8',r)+cell('gf',r)+cell('prem',r)+cell('spoon',r)+'</tr>';
+  });
+  $('#ladderBox').innerHTML=h+'</tbody></table>';
+  const wc=whatifCount(),chip=$('#whatifChip');
+  chip.hidden=wc===0;chip.textContent=wc+' what-if'+(wc===1?'':'s')+' active';
+}
+// Heatmap tab: a grid of club by ladder position. Cell colour strength grows with the square root of the chance, so small chances are still visible.
+function renderHeat(){
+  const order=TEAMS.map((_,i)=>i).sort((a,b)=>derive(a).avg-derive(b).avg);
+  let h='<table class="heat"><thead><tr><th></th>';
+  for(let p=1;p<=NT;p++)h+='<th>'+p+'</th>';
+  h+='</tr></thead><tbody>';
+  order.forEach(i=>{
+    h+='<tr><th class="rowh" scope="row">'+TEAMS[i].n+'</th>';
+    for(let p=0;p<NT;p++){
+      const v=pp(i,p),a=v<0.5?0:Math.min(92,Math.sqrt(v)*15);
+      const cls=p===4?'f4':p===8?'f8':'';
+      const style=a>0?'background:color-mix(in srgb,var(--accent) '+a.toFixed(0)+'%,var(--panel-2));color:'+(a>55?'var(--accent-ink)':'var(--ink)'):'';
+      h+='<td class="'+cls+'" style="'+style+'" title="'+TEAMS[i].n+', position '+(p+1)+': '+v.toFixed(1)+'%">'+(v>=0.5?Math.round(v):'')+'</td>';
+    }
+    h+='</tr>';
+  });
+  $('#heatBox').innerHTML=h+'</tbody></table>';
+}
+// Builds one stat tile (label, big number, small caption) for the Club tab.
+function tile(k,v,s){return '<div class="tile"><span class="k">'+k+'</span><span class="v">'+v+'</span><span class="s">'+s+'</span></div>'}
+// Turns a percentage into "1 in N" wording, for example 12.5% becomes "1 in 8".
+function oneIn(p){return p>0?'1 in '+Math.max(1,Math.round(100/p)).toLocaleString():'not in this run'}
+// Draws the bar chart of finishing positions for a club as an inline SVG. Blue bars are finals positions (1 to 8).
+function distChart(i){
+  const W=720,H=230,L=40,Rm=8,T=16,B=30,iw=W-L-Rm,ih=H-T-B;
+  const probs=[];for(let p=0;p<NT;p++)probs.push(pp(i,p));
+  const mxp=Math.max.apply(null,probs);
+  const step=mxp>20?10:mxp>8?5:mxp>4?2:1;
+  const top=Math.max(step,Math.ceil(mxp/step)*step);
+  const bw=iw/NT;
+  let s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Chance of each ladder position for '+TEAMS[i].n+'">';
+  for(let v=0;v<=top;v+=step){const y=T+ih-ih*v/top;s+='<line class="grid" x1="'+L+'" x2="'+(W-Rm)+'" y1="'+y+'" y2="'+y+'"/><text class="tick" x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end">'+v+'%</text>'}
+  probs.forEach((v,p)=>{
+    const h=ih*v/top,x=L+p*bw+3,y=T+ih-h;
+    s+='<rect class="'+(p<8?'bar-in':'bar-out')+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+(bw-6).toFixed(1)+'" height="'+Math.max(h,0).toFixed(1)+'" rx="2"><title>Position '+(p+1)+': '+v.toFixed(1)+'%</title></rect>';
+    if(v>=1)s+='<text class="tick" x="'+(x+(bw-6)/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" text-anchor="middle">'+Math.round(v)+'</text>';
+    s+='<text class="tick" x="'+(x+(bw-6)/2).toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle">'+(p+1)+'</text>';
+  });
+  return s+'</svg>';
+}
+// Club tab: header, stat tiles, finishing chart, and the list of remaining games with Auto / Win / Loss what-if buttons.
+function renderClub(){
+  const i=state.club,d=derive(i),t=TEAMS[i];
+  $('#clubSel').value=String(i);
+  $('#cName').innerHTML=t.n+'<small>Rating '+sgn(state.rt[i])+' points per game</small>';
+  $('#cTiles').innerHTML=
+    tile('Premiers',f1(d.prem)+'%',oneIn(d.prem))+tile('Grand Final',f1(d.gf)+'%',oneIn(d.gf))
+   +tile('Top four',f1(d.top4)+'%',oneIn(d.top4))+tile('Top eight',f1(d.top8)+'%',oneIn(d.top8))
+   +tile('Projected wins',d.wins.toFixed(1),'over the season')+tile('Wooden spoon',f1(d.spoon)+'%',oneIn(d.spoon));
+  $('#cChart').innerHTML=distChart(i);
+  let fx='';
+  for(let g=0;g<NG;g++){
+    if(!(GH[g]===i||GA[g]===i)||played(g))continue;
+    const home=GH[g]===i,opp=home?GA[g]:GH[g],wp=home?winProb(i,opp):1-winProb(GH[g],i),f=state.forced[g];
+    const mode=f===0?0:((f===1)===home?1:2);
+    const btn=(v,l)=>'<button type="button" data-g="'+g+'" data-v="'+v+'" aria-pressed="'+(mode===v)+'">'+l+'</button>';
+    fx+='<li class="fx"><span class="rd">Rd '+rl(GR[g])+'</span><span class="opp">'+(home?'v ':'@ ')+TEAMS[opp].n+'<small>'+code(opp)+'</small></span>'
+      +'<div class="seg"><span class="wp">'+Math.round(wp*100)+'%</span>'+btn(0,'Auto')+btn(1,'Win')+btn(2,'Loss')+'</div></li>';
+  }
+  $('#fixtures').innerHTML=fx||'<li class="note">No games left to play at this point in the season.</li>';
+}
+
+// MODELS TAB
+// Orders the model leaderboard by whichever column the user clicked (accuracy by default).
+function sortStats(list){
+  const k=state.lbSort;
+  const cmp={
+    acc:(a,b)=>b.acc-a.acc||(a.mae==null?1:b.mae==null?-1:a.mae-b.mae)||b.n-a.n,
+    bits:(a,b)=>(b.bits==null?-9:b.bits)-(a.bits==null?-9:a.bits),
+    mae:(a,b)=>(a.mae==null?1e9:a.mae)-(b.mae==null?1e9:b.mae),
+    n:(a,b)=>b.n-a.n
+  }[k];
+  return list.slice().sort(cmp);
+}
+// Draws the leaderboard, then the tips grid. Shows a friendly message instead when no tips are loaded.
+function renderModels(){
+  const has=M.has;
+  $('#modelsEmpty').hidden=has;$('#modelsBody').hidden=!has;
+  if(!has)return;
+  const stats=sortStats(modelStats());
+  const gamesPlayed=(()=>{let n=0;for(let g=0;g<NG;g++)if(played(g))n++;return n})();
+  $('#lbNote').textContent=gamesPlayed?('Scored on '+gamesPlayed+' completed games. Accuracy counts draws as correct. Bits reward confident right tips and punish confident wrong ones, higher is better. Margin error is how many points the predicted margin missed by on average, lower is better.'):'No games have been played at this point in the season, so there is nothing to score yet.';
+  const accs=stats.map(s=>s.acc);const lo=50,hi=Math.max(lo+1,Math.max.apply(null,accs.concat([lo+1])));
+  const head=(k,l)=>'<th'+(state.lbSort===k?' aria-sort="descending"':'')+'><button type="button" data-sort="'+k+'">'+l+'</button></th>';
+  let h='<table class="tbl narrow"><thead><tr><th>#</th><th>Model</th>'+head('n','Tips')+'<th>Correct</th>'+head('acc','Accuracy')+head('bits','Bits')+head('mae','Margin error')+'</tr></thead><tbody>';
+  stats.forEach((s,k)=>{
+    h+='<tr><td>'+(k+1)+'</td><td><span class="mname">'+s.name+'</span></td><td>'+s.n+'</td><td>'+s.ok+'</td>'
+      +'<td class="pc" style="--w:'+Math.max(0,Math.min(100,(s.acc-lo)/(hi-lo)*100))+'%"><span>'+s.acc.toFixed(1)+'%</span></td>'
+      +'<td>'+(s.bits==null?'–':s.bits.toFixed(2))+'</td><td>'+(s.mae==null?'–':s.mae.toFixed(1))+'</td></tr>';
+  });
+  $('#leaderBox').innerHTML=h+'</tbody></table>';
+  renderTips(stats);
+}
+// Draws the grid of tips for the chosen round. One row per game, one column per model.
+// Cell text is the team tipped and its chance of winning. Green = right, red = wrong, only for games already played.
+function renderTips(stats){
+  stats=stats||sortStats(modelStats());
+  const ri=state.tipRound;
+  const ranked=sortStats(stats.length?stats:[]).map(s=>s.id);
+  const rest=M.sources.map(s=>s.id).filter(id=>ranked.indexOf(id)<0);
+  const all=ranked.concat(rest);
+  const ids=state.tipShow==='all'?all:all.slice(0,+state.tipShow);
+  let h='<table class="tips"><thead><tr><th class="mh">Match</th><th>Consensus</th><th class="sim">SirenSim</th>';
+  ids.forEach(id=>{h+='<th>'+srcName(id)+'</th>'});
+  h+='</tr></thead><tbody>';
+  for(let g=0;g<NG;g++){
+    if(GR[g]!==ri)continue;
+    const hh=GH[g],aa=GA[g],pl=played(g),res=AM[g];
+    const sub=pl?(((AT[g]+res)/2)+' – '+((AT[g]-res)/2)):fmtDate(GDATE[g]);
+    h+='<tr><td class="mh"><span class="vs">'+code(hh)+' v '+code(aa)+'</span><small>'+sub+'</small></td>';
+    const arr=M.byGame.get(g)||[];
+    const by=new Map(arr.map(t=>[t.s,t]));
+    const mk=(homeTip,conf,cls)=>{
+      let c=cls||'';
+      if(pl&&!cls)c=(res===0||(res>0)===homeTip)?'ok':'no';
+      return '<td class="'+c+'">'+code(homeTip?hh:aa)+(conf!=null?' '+Math.round(conf):'')+'</td>';
+    };
+    const ps=arr.filter(t=>t.p!=null).map(t=>t.p);
+    if(ps.length){const pm=ps.reduce((x,y)=>x+y,0)/ps.length,ht=pm>=50;h+=mk(ht,ht?pm:100-pm)}
+    else h+='<td class="empty">–</td>';
+    const sp=winProb(hh,aa)*100,sht=sp>=50;
+    h+=mk(sht,sht?sp:100-sp).replace('<td class="','<td class="sim ');
+    ids.forEach(id=>{
+      const t=by.get(id);
+      if(!t){h+='<td class="empty">–</td>';return}
+      const ht=(t.t-1)===hh;
+      h+=mk(ht,t.p!=null?(ht?t.p:100-t.p):null);
+    });
+    h+='</tr>';
+  }
+  $('#tipsBox').innerHTML=h+'</tbody></table>';
+}
+// Redraws every tab. Called whenever a simulation finishes.
+function renderAll(){renderHeader();renderLadder();renderHeat();renderClub();renderModels()}
+
+// TABS: the page uses the URL #hash to decide which tab to show, so tabs can be bookmarked.
+// Shows the tab named in the URL (defaults to ladder) and hides the others.
+function showTab(){
+  const h=(location.hash||'').slice(1),t=TABS.indexOf(h)>=0?h:'ladder';
+  document.querySelectorAll('.tab').forEach(a=>{if(a.dataset.tab===t)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+  document.querySelectorAll('.view').forEach(v=>{v.hidden=v.id!=='view-'+t});
+}
+window.addEventListener('hashchange',showTab);
+
+// CONTROLS: reading sliders and buttons, and updating state.
+// Moves every rating slider to match the current ratings (needed after ratings are refitted).
+function syncSliders(){
+  TEAMS.forEach((t,i)=>{const el=$('#rt-'+i);if(el){el.value=Math.round(state.rt[i]);$('#rto-'+i).textContent=sgn(state.rt[i])}});
+}
+// The round shown by default on the Models tab: the next round still to be played.
+function defaultTipRound(){return Math.max(0,Math.min(state.R,NR-1))}
+// Fills in everything that depends on which season was loaded: club dropdowns, rating sliders,
+// round slider range, round dropdown, and the "Live data" or "Example season" labels.
+function setupUI(){
+  const opts=TEAMS.map((t,i)=>'<option value="'+i+'">'+t.n+'</option>').join('');
+  $('#clubSel').innerHTML=opts;$('#untilClub').innerHTML=opts;
+  $('#clubSel').value=String(state.club);$('#untilClub').value=String(state.club);
+  let sl='';
+  TEAMS.forEach((t,i)=>{sl+='<div class="sl"><div class="labrow"><span>'+t.n+'</span><output id="rto-'+i+'">'+sgn(state.rt[i])+'</output></div><input type="range" id="rt-'+i+'" min="-30" max="30" step="1" value="'+Math.round(state.rt[i])+'" data-i="'+i+'" aria-label="'+t.n+' rating"></div>'});
+  $('#sliders').innerHTML=sl;
+  $('#hga').value=state.hga;$('#sd').value=state.sd;
+  $('#hgaOut').textContent='+'+state.hga;$('#sdOut').textContent=state.sd;
+  const rs=$('#round');rs.max=NR;rs.value=state.R;
+  state.tipRound=defaultTipRound();
+  $('#tipRound').innerHTML=ROUNDS.map((r,i)=>'<option value="'+i+'">Round '+r+'</option>').join('');
+  $('#tipRound').value=String(state.tipRound);
+  const chip=$('#dataChip'),note=$('#dataNote');
+  if(state.real){
+    const when=state.meta.updatedAt?new Date(state.meta.updatedAt).toLocaleString('en-AU',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):'';
+    chip.className='chip live';chip.textContent='Live data '+(state.meta.year||'')+(when?' · updated '+when:'');
+    note.innerHTML='<b>About the data.</b> Fixtures, scores and model tips come from the Squiggle API and refresh automatically. Club ratings are fitted from this season’s results (average margin, adjusted for opponent strength and home advantage), so early in a season they are noisy. Edit them in Simulator to apply your own view.';
+    $('#simNote').textContent='Ratings start from this season’s results and refit when you move the rounds-played slider, until you edit one yourself. Reset ratings refits them. Higher volatility means more upsets. Finals are played at neutral venues.';
+  }else{
+    chip.className='chip warn';chip.textContent='Example season';
+    note.innerHTML='<b>About the data.</b> The 18 clubs and their ratings are illustrative starting values, and the season shown so far is one example run from those ratings. It is not the official fixture or real results. Edit the ratings in Simulator to model your own view.';
+  }
+}
+// EVENT LISTENERS: what happens when the user touches a control.
+// Rounds-played slider: rewind the season. With real data and no hand edits, ratings are refitted for that point in the season.
+$('#round').addEventListener('input',e=>{
+  state.R=+e.target.value;
+  if(state.real&&!state.manual){state.rt=fitRatings();syncSliders()}
+  state.tipRound=defaultTipRound();$('#tipRound').value=String(state.tipRound);
+  renderHeader();queueRun(250);
+});
+// Seasons-per-run dropdown.
+$('#simsN').addEventListener('change',e=>{state.n=+e.target.value;renderHeader();queueRun(0)});
+// Run again button: same settings, new random seed.
+$('#runBtn').addEventListener('click',()=>queueRun(0));
+// Club dropdown on the Club tab.
+$('#clubSel').addEventListener('change',e=>{state.club=+e.target.value;renderClub()});
+// Clicking a club name in the ladder jumps to its Club tab.
+$('#ladderBox').addEventListener('click',e=>{const b=e.target.closest('[data-club]');if(b){state.club=+b.dataset.club;renderClub();location.hash='club'}});
+// What-if buttons: Win / Loss force that result for the selected club, Auto removes it. Then the odds re-run.
+$('#fixtures').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-g]');if(!b)return;
+  const g=+b.dataset.g,v=+b.dataset.v,home=GH[g]===state.club;
+  state.forced[g]=v===0?0:(v===1?(home?1:-1):(home?-1:1));
+  renderClub();renderLadder();queueRun(250);
+});
+// Clear what-ifs button.
+$('#clearWhatif').addEventListener('click',()=>{state.forced.fill(0);renderClub();renderLadder();queueRun(0)});
+// Rating sliders. Editing one switches the site to "manual ratings", so slider moves no longer refit them.
+$('#sliders').addEventListener('input',e=>{
+  const i=e.target.dataset.i;if(i==null)return;
+  state.manual=true;state.rt[i]=+e.target.value;$('#rto-'+i).textContent=sgn(state.rt[i]);queueRun(350);
+});
+// Home ground advantage and game volatility sliders.
+$('#hga').addEventListener('input',e=>{state.hga=+e.target.value;$('#hgaOut').textContent='+'+state.hga;queueRun(350)});
+$('#sd').addEventListener('input',e=>{state.sd=+e.target.value;$('#sdOut').textContent=state.sd;queueRun(350)});
+// Reset ratings: back to fitted ratings (real data) or the example ratings, and default advantage and volatility.
+$('#resetRatings').addEventListener('click',()=>{
+  state.manual=false;state.hga=7;state.sd=36;
+  state.rt=state.real?fitRatings():Float64Array.from(DEF_R);
+  syncSliders();
+  $('#hga').value=7;$('#sd').value=36;$('#hgaOut').textContent='+7';$('#sdOut').textContent='36';
+  renderClub();queueRun(0);
+});
+// Models tab: round and "models shown" dropdowns, and the sortable leaderboard headers.
+$('#tipRound').addEventListener('change',e=>{state.tipRound=+e.target.value;renderTips()});
+$('#tipShow').addEventListener('change',e=>{state.tipShow=e.target.value;renderTips()});
+$('#leaderBox').addEventListener('click',e=>{const b=e.target.closest('button[data-sort]');if(b){state.lbSort=b.dataset.sort;renderModels()}});
+
+// "HOW MANY SEASONS UNTIL..." TOOL
+// Simulates seasons one by one until the chosen club does the chosen thing (win the flag, make the finals...),
+// then reports how many seasons it took. Capped at 500,000 so rare outcomes cannot freeze the page.
+// Keeps the last few results so they can be shown as chips under the big number.
+const untilHist=[];let untilRun=0;
+const EVT={flag:'win the premiership',gf:'reach the Grand Final',top4:'finish top four',top8:'make the finals',spoon:'finish last'};
+// Start button for the tool above. Works in chunks of 2,000 seasons so the page stays responsive.
+$('#untilGo').addEventListener('click',()=>{
+  const id=++untilRun,team=+$('#untilClub').value,ev=$('#untilEvent').value,c=makeCtx(),cap=500000;
+  let count=0;
+  const big=$('#untilBig'),txt=$('#untilText');
+  txt.textContent='Simulating seasons for '+TEAMS[team].n+'…';
+    // Did the chosen club do the chosen thing in the season that was just simulated?
+  const hit=champ=>{
+    if(ev==='flag')return champ===team;
+    if(ev==='gf')return S.gfA===team||S.gfB===team;
+    let p=0;while(S.order[p]!==team)p++;
+    return ev==='top4'?p<4:ev==='top8'?p<8:p===NT-1;
+  };
+  const step=()=>{
+    if(id!==untilRun)return;
+    const end=Math.min(cap,count+2000);
+    while(count<end){count++;if(hit(playSeason(c))){finish(true);return}}
+    big.textContent=count.toLocaleString();
+    if(count>=cap){finish(false);return}
+    setTimeout(step,0);
+  };
+  const finish=ok=>{
+    big.textContent=count.toLocaleString();
+    if(ok){
+      untilHist.unshift(TEAMS[team].c+' '+EVT[ev]+': '+count.toLocaleString());
+      if(untilHist.length>8)untilHist.pop();
+      txt.textContent=TEAMS[team].n+' took '+count.toLocaleString()+' simulated seasons to '+EVT[ev]+'. Run it again and the count changes, because every run starts fresh.';
+    }else txt.textContent='No hit for '+TEAMS[team].n+' in '+cap.toLocaleString()+' seasons. With these ratings that outcome is extremely rare.';
+    $('#untilHist').innerHTML=untilHist.map(h=>'<span class="chip">'+h+'</span>').join('');
+  };
+  step();
+});
+
+// BOOT (runs once when the page opens)
+// 1. Try to download data/season.json (written by the GitHub Action).
+// 2. If it loaded, build the real season and the model tips. If not, build the example season.
+// 3. Fill in the controls, show the right tab, and run the first batch of simulations.
+// Downloads data/season.json. Returns null if it is missing or empty (for example on a computer with no data file), so the site can fall back to the example season.
+async function loadData(){
+  try{
+    const res=await fetch('data/season.json',{cache:'no-cache'});
+    if(!res.ok)return null;
+    const j=await res.json();
+    return j&&Array.isArray(j.games)&&j.games.length?j:null;
+  }catch(e){return null}
+}
+// If anything goes wrong while reading real data, we log it to the browser console and use the example season instead of showing a blank page.
+loadData().then(data=>{
+  try{if(data){buildReal(data);setupModels(data)}else buildExample()}
+  catch(e){console.error('Could not use season.json, using example data.',e);buildExample()}
+  setupUI();showTab();run(state.n,true);
+});
+</script>
+</body>
+</html>

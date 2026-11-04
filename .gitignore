@@ -1,0 +1,6 @@
+# The data file is generated. The GitHub Action rebuilds it on every deploy,
+# so there is no need to commit the copy you make while testing locally.
+site/data/season.json
+
+node_modules/
+.DS_Store
