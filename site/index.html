@@ -166,6 +166,11 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
 /* ---- Models tab: the tips grid. The first column stays visible while you scroll sideways ---- */
 .pickers{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
 .pickers .field{min-width:150px}
+/* Backtest: our own model's row is tinted, the home-side baseline is dimmed, the check box row lines up with the dropdowns. */
+.tbl tr.own td{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.tbl tr.base td{color:var(--ink-2)}
+.tbl td small{font-size:11px;color:var(--ink-2)}
+.chk{display:flex;align-items:center;gap:8px;font:500 14px var(--body);min-height:40px}
 .tips{border-collapse:separate;border-spacing:2px;min-width:640px}
 .tips th{font:500 11px/1.25 var(--mono);color:var(--ink-2);padding:6px 4px;text-align:center;vertical-align:bottom;max-width:96px;overflow-wrap:anywhere}
 .tips th.mh,.tips td.mh{text-align:left;position:sticky;left:0;background:var(--panel);z-index:1;min-width:132px}
@@ -244,6 +249,7 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
       <a class="tab" href="#heatmap" data-tab="heatmap">Heatmap</a>
       <a class="tab" href="#club" data-tab="club">Club</a>
       <a class="tab" href="#models" data-tab="models">Models</a>
+      <a class="tab" href="#backtest" data-tab="backtest">Backtest</a>
       <a class="tab" href="#simulator" data-tab="simulator">Simulator</a>
       <a class="tab" href="#tools" data-tab="tools">Tools</a>
     </nav>
@@ -316,17 +322,62 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
           </div>
         </div>
         <div class="scroll" id="tipsBox"></div>
-        <p class="note">Each cell is the team a model tipped and its chance of winning. Green was right, red was wrong, grey is a game not yet played at this point. Consensus averages every model's chance for the home side. The SirenSim column uses this site's own ratings, which are fitted on results so far, so for past rounds it is in-sample and looks better than it would have in real time.</p>
+        <p class="note">Each cell is the team a model tipped and its chance of winning. Green was right, red was wrong, grey is a game not yet played at this point. Consensus averages every model's chance for the home side. The SirenSim column is our own model, SirenSim v1. For any past game its tip only uses results from before that game, so it is a fair test. Small grey text under each match shows the rain and wind when we have weather for it.</p>
       </div>
     </section>
 
-    <!-- TAB 5, SIMULATOR: sliders for every club's strength, home ground advantage and how random games are. -->
+    <!-- TAB 5, BACKTEST: replays past seasons and marks every predictor, including our own model, on games it had not seen. Filled in by renderBacktest(). -->
+    <section class="view" id="view-backtest" hidden>
+      <div class="vhead">
+        <div>
+          <h2>Backtest</h2>
+          <p>Each predictor tips every past game and is marked against what really happened. Our model, SirenSim v1, only ever uses results from before the game it is tipping. The first season in the data is used to warm it up, so it is not scored.</p>
+        </div>
+      </div>
+      <p class="note" id="btEmpty" hidden>No past seasons are loaded, so there is nothing to replay. Past seasons are downloaded by the data script into data/history.json. See the README.</p>
+      <div id="btBody" hidden>
+        <div class="pickers"><div class="field"><label for="btSeason">Season</label><select id="btSeason"></select></div></div>
+        <div class="scroll" id="btTable"></div>
+        <p class="note" id="btNote"></p>
+        <h3 class="sub">By season</h3>
+        <div class="scroll" id="btSeasons"></div>
+        <div class="vhead">
+          <div>
+            <h3 class="sub">SirenSim v1 settings</h3>
+            <p>Rating speed is how far a surprise moves a rating. Carry over is how much of a rating survives into the next season. Rest and travel are worth in points. Everything on this tab and the Models tab updates as you move them.</p>
+          </div>
+          <div class="chips"><button class="btn ghost" id="mReset" type="button">Reset settings</button></div>
+        </div>
+        <div class="sliders">
+          <div class="sl"><div class="labrow"><span>Rating speed</span><output id="mKOut"></output></div><input type="range" id="mK" min="0" max="0.2" step="0.005" value="0.07"></div>
+          <div class="sl"><div class="labrow"><span>Carry over between seasons</span><output id="mCarryOut"></output></div><input type="range" id="mCarry" min="0" max="1" step="0.05" value="0.7"></div>
+          <div class="sl"><div class="labrow"><span>Rest, per extra day</span><output id="mRestOut"></output></div><input type="range" id="mRest" min="0" max="2" step="0.1" value="0.5"></div>
+          <div class="sl"><div class="labrow"><span>Travel, per 1,000 km</span><output id="mTravelOut"></output></div><input type="range" id="mTravel" min="0" max="4" step="0.1" value="1"></div>
+        </div>
+        <h3 class="sub">What weather does to games</h3>
+        <div id="wxBox"></div>
+      </div>
+    </section>
+
+    <!-- TAB 6, SIMULATOR: choose what predicts each game, then adjust club ratings, home ground advantage and how random games are. -->
     <section class="view" id="view-simulator" hidden>
       <div class="vhead">
         <div>
-          <h2>Set how strong every club is</h2>
-          <p>Ratings are in points per game against an average side. Changes apply to games still to be played, then the season re-runs.</p>
+          <h2>What predicts each game?</h2>
+          <p>Pick where the sim gets the expected margin for every game still to be played. Squiggle models only tip the next round or so, so games they have not tipped, and the finals, use the club ratings below.</p>
         </div>
+      </div>
+      <!-- Prediction source. The options are filled in by setupUI() from the models found in season.json, and the coverage badge by renderSimSource(). -->
+      <div class="pickers">
+        <div class="field"><label for="source">Prediction source</label><select id="source"></select></div>
+        <div class="field"><label for="horizon">Use model tips for</label>
+          <select id="horizon"><option value="1">The next round</option><option value="2">The next 2 rounds</option><option value="4">The next 4 rounds</option><option value="all" selected>All remaining rounds</option></select>
+        </div>
+        <label class="chk" for="useWx"><input type="checkbox" id="useWx" checked> Use weather for scoring and upsets</label>
+        <span class="chip" id="srcChip"></span>
+      </div>
+      <div class="vhead">
+        <div><h3 class="sub">Club ratings</h3><p>Points per game against an average side. They matter for games the models have not tipped, and for the finals.</p></div>
         <div class="chips"><button class="btn ghost" id="resetRatings" type="button">Reset ratings</button></div>
       </div>
       <div class="sliders" id="sliders"></div>
@@ -337,7 +388,7 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
       <p class="note" id="simNote">Higher volatility means more upsets. Home ground advantage is the extra margin the home side starts with. Finals are played at neutral venues.</p>
     </section>
 
-    <!-- TAB 6, TOOLS: "how many seasons until..." keeps simulating until a chosen club does something. -->
+    <!-- TAB 7, TOOLS: "how many seasons until..." keeps simulating until a chosen club does something. -->
     <section class="view" id="view-tools" hidden>
       <div class="vhead">
         <div>
@@ -368,7 +419,7 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
 
   <!-- FOOTER: a short explanation of the maths, and a note about where the data comes from (#dataNote is filled in by setupUI()). -->
   <footer class="foot">
-    <p><b>How it works.</b> Each game starts from the rating gap between the two clubs plus a home ground edge, then adds random noise to produce a final margin and scores. Wins are worth 4 premiership points, draws 2, and the ladder is ordered by points then percentage. The top eight play the finals series, simulated at neutral venues.</p>
+    <p><b>How it works.</b> Each game starts from an expected margin, taken from the chosen prediction source (Squiggle models by default) or, where there is none, from the rating gap between the two clubs plus a home ground edge. Random noise is then added to produce a final margin and scores. Wins are worth 4 premiership points, draws 2, and the ladder is ordered by points then percentage. The top eight play the finals series, simulated at neutral venues.</p>
     <p id="dataNote"></p>
   </footer>
 </div>
@@ -404,6 +455,15 @@ const TEAMS=[
 ];
 // Just the example ratings as a plain list, so "Reset ratings" can restore them.
 const DEF_R=TEAMS.map(t=>t.r);
+// Where each club is based, as [latitude, longitude], in the same order as TEAMS. Used to work out how far a
+// team travels to a ground. Melbourne clubs share one point, Geelong, Gold Coast and the two Sydney clubs have their own.
+const TEAM_BASE=[
+ [-34.9285,138.6007],[-27.4698,153.0251],[-37.8136,144.9631],[-37.8136,144.9631],
+ [-37.8136,144.9631],[-31.9505,115.8605],[-38.1499,144.3617],[-28.0167,153.4],
+ [-33.8688,151.2093],[-37.8136,144.9631],[-37.8136,144.9631],[-37.8136,144.9631],
+ [-34.9285,138.6007],[-37.8136,144.9631],[-37.8136,144.9631],[-33.8688,151.2093],
+ [-31.9505,115.8605],[-37.8136,144.9631]
+];
 // Seeded random number generator. Give it the same seed and it produces the same
 // sequence every time, which is how the example season stays identical on every visit.
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -423,7 +483,12 @@ function shuffle(a,rand){for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()
 //   AM / AT  actual margin (home minus away) and actual total score
 //   GID      Squiggle's id for the game      GDATE  kickoff date text
 //   ROUNDS   real round numbers, e.g. [1,2,3...]      NR  number of rounds
-let NG=0,NR=0,GH,GA,GR,HAS,AM,AT,GID,GDATE,ROUNDS=[],gidx=new Map();
+//   MU       expected margin (home minus away) for each game still to be played, taken from the chosen
+//            prediction source. NaN means "no prediction", and the simulation then uses club ratings.
+//   MT       expected total points for each game still to be played (NaN = use the usual 168). Set from the weather.
+//   SDM      how much more (or less) random each game is than usual. 1 = normal. Wet games get a bigger number.
+//   GAMES_SORTED  this season's games in the same order as the arrays above (kept for building the timeline)
+let NG=0,NR=0,GH,GA,GR,HAS,AM,AT,GID,GDATE,ROUNDS=[],gidx=new Map(),MU,MT,SDM,GAMES_SORTED=[];
 // The single object holding everything the user can change. Nothing else is global state.
 //   rt     rating for each club          hga   home ground advantage (points)
 //   sd     how random a game is (spread of the margin, in points)
@@ -431,12 +496,16 @@ let NG=0,NR=0,GH,GA,GR,HAS,AM,AT,GID,GDATE,ROUNDS=[],gidx=new Map();
 //   n      seasons to simulate per run   forced  what-if results (0 none, 1 home win, -1 away win)
 //   club   club currently shown on the Club tab    agg  results of the latest simulation run
 //   real   true when real data loaded     manual  true once the user edits a rating by hand
-const state={rt:new Float64Array(NT),hga:7,sd:36,R:0,n:10000,forced:null,club:1,agg:null,real:false,manual:false,meta:null,tipRound:0,tipShow:'6',lbSort:'acc'};
+//   source   what predicts the games still to be played: 'all' (every Squiggle model averaged), 'top6',
+//            'm<id>' (one Squiggle model), 'ratings' (no models), or the id of a custom model
+//   horizon  only use model tips for this many upcoming rounds (1e9 means no limit)
+//   useWeather  true to let weather change expected scoring and how random each upcoming game is
+const state={rt:new Float64Array(NT),hga:7,sd:36,R:0,n:10000,forced:null,club:1,agg:null,real:false,manual:false,meta:null,tipRound:0,tipShow:'6',lbSort:'acc',source:'ratings',horizon:1e9,useWeather:true};
 // Creates empty arrays big enough for n games. Called once when the season is built.
 function alloc(n){
   NG=n;GH=new Int8Array(n);GA=new Int8Array(n);GR=new Int8Array(n);HAS=new Uint8Array(n);
   AM=new Float64Array(n);AT=new Float64Array(n);GID=new Array(n).fill(0);GDATE=new Array(n).fill('');
-  state.forced=new Int8Array(n);gidx=new Map();
+  state.forced=new Int8Array(n);gidx=new Map();MU=new Float64Array(n).fill(NaN);MT=new Float64Array(n).fill(NaN);SDM=new Float64Array(n).fill(1);GAMES_SORTED=[];
 }
 // True if game g already has a real result AND falls inside the rounds-played slider.
 const played=g=>HAS[g]===1&&GR[g]<state.R;
@@ -478,7 +547,7 @@ function buildReal(data){
   const games=data.games.slice().sort((a,b)=>a.round-b.round||(a.date<b.date?-1:a.date>b.date?1:0)||a.id-b.id);
   ROUNDS=[...new Set(games.map(g=>g.round))].sort((a,b)=>a-b);NR=ROUNDS.length;
   const ri=new Map(ROUNDS.map((r,i)=>[r,i]));
-  alloc(games.length);
+  alloc(games.length);GAMES_SORTED=games;
   let lastDone=-1;
   games.forEach((g,k)=>{
     if(!(g.h>=1&&g.h<=NT&&g.a>=1&&g.a<=NT))throw new Error('Unexpected team id in game '+g.id);
@@ -493,7 +562,7 @@ function buildReal(data){
 // and for home ground advantage. We repeat the calculation 80 times so the numbers settle
 // (strong opponents make a club's margins count for more). The "+K" below shrinks ratings
 // toward zero, so a club that won one game by 80 points in round 1 is not treated as a superteam.
-// This is a first-pass approach; step 2 of the plan is to improve it.
+// These ratings are the fallback for games no model has tipped, and they decide the finals.
 function fitRatings(){
   const r=new Float64Array(NT),list=[];
   for(let g=0;g<NG;g++)if(played(g))list.push(g);
@@ -516,10 +585,10 @@ function fitRatings(){
 // then play the finals. We do this thousands of times and count what happens.
 // Scratch space reused by every simulated season (avoids creating new arrays 10,000 times). pts = premiership points, w = wins, pf/pa = points for/against, order = clubs sorted by ladder position.
 const S={pts:new Int16Array(NT),w:new Int16Array(NT),pf:new Float64Array(NT),pa:new Float64Array(NT),key:new Float64Array(NT),order:new Int8Array(NT),gfA:0,gfB:0};
-// Takes a snapshot of the current settings (ratings, slider, what-ifs) so changing a slider mid-run cannot corrupt a run in progress.
+// Takes a snapshot of the current settings (ratings, predicted margins, slider, what-ifs) so changing a slider mid-run cannot corrupt a run in progress.
 function makeCtx(){
   const rand=mulberry32((Math.random()*4294967296)>>>0);
-  return{rt:Float64Array.from(state.rt),hga:state.hga,sd:state.sd,R:state.R,forced:Int8Array.from(state.forced),randn:makeRandn(rand)};
+  return{rt:Float64Array.from(state.rt),mu:Float64Array.from(MU),mt:Float64Array.from(MT),sdm:Float64Array.from(SDM),hga:state.hga,sd:state.sd,R:state.R,forced:Int8Array.from(state.forced),randn:makeRandn(rand)};
 }
 // Simulates ONE full season and returns the index of the premiership winner.
 // It also leaves the final ladder in S.order and the Grand Finalists in S.gfA / S.gfB.
@@ -533,11 +602,14 @@ function playSeason(c){
         // Already played (and inside the slider)? Use the real score.
     if(HAS[g]===1&&GR[g]<c.R){m=AM[g];t=AT[g]}
     else{
-            // Not played yet: expected margin = rating gap + home advantage, then add a random "bell curve"
-            // amount so upsets can happen. A bigger sd means more upsets.
-      m=Math.round(rt[h]-rt[a]+c.hga+sd*rn());
-            // Total points scored in the game, randomly around 168 (never below 100).
-      t=168+16*rn();if(t<100)t=100;
+            // Not played yet. The expected margin comes from the chosen prediction source (c.mu[g]) when it has a tip
+            // for this game. mu is NaN when it has none (NaN is the only number that is not equal to itself, so
+            // mu===mu is false) and then we use the rating gap plus home advantage instead. Either way we add a
+            // random "bell curve" amount so upsets can happen. A bigger sd means more upsets.
+      const mu=c.mu[g];
+      m=Math.round((mu===mu?mu:rt[h]-rt[a]+c.hga)+sd*c.sdm[g]*rn());
+            // Total points scored in the game, randomly around the expected total (168 unless the weather changed it), never below 100.
+      const mt=c.mt[g];t=(mt===mt?mt:168)+16*rn();if(t<100)t=100;
             // If the user forced a result on the Club tab, flip the margin if needed so the chosen team wins.
       const f=c.forced[g];
       if(f===1&&m<=0)m=Math.abs(m)+1;else if(f===-1&&m>=0)m=-Math.abs(m)-1;
@@ -581,22 +653,28 @@ function oneSeason(c,agg){
 function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y}
 // Probability that a bell-curve number is below z. Turns "expected margin / spread" into a win probability.
 function Phi(z){return 0.5*(1+erf(z/Math.SQRT2))}
-// Chance (0 to 1) that home club h beats away club a, using current ratings. Used for the win % on the Club tab and the SirenSim column on the Models tab.
+// Chance (0 to 1) that home club h beats away club a, using current ratings only. Feeds the SirenSim column on the Models tab.
 function winProb(h,a){return Phi((state.rt[h]-state.rt[a]+state.hga)/state.sd)}
+// Chance (0 to 1) that the HOME side wins game g, using the same expected margin the simulation uses:
+// the prediction source's margin if it has one, otherwise ratings plus home advantage. Feeds the win % on the Club tab.
+function winProbGame(g){
+  const mu=MU[g];
+  return Phi((mu===mu?mu:state.rt[GH[g]]-state.rt[GA[g]]+state.hga)/state.sd);
+}
 
 // MODEL TIPS
 // Squiggle publishes predictions from many community models. For each game we keep a list of tips.
 // Each tip is a small object with short field names (made by scripts/fetch-data.mjs):
 //   g = game id   s = model id   t = team id tipped to win
 //   p = model's chance the HOME team wins (0-100)   m = predicted home margin
-const M={has:false,sources:[],byGame:new Map()};
+const M={has:false,sources:[],byGame:new Map(),ids:new Set()};
 // Files each tip under its game so we can look tips up quickly. Sets M.has to false when there are no tips (example mode).
 function setupModels(data){
-  M.byGame=new Map();M.sources=(data.sources||[]).slice();
+  M.byGame=new Map();M.ids=new Set();M.sources=(data.sources||[]).slice();
   for(const t of (data.tips||[])){
     const gi=gidx.get(t.g);if(gi===undefined)continue;
     let arr=M.byGame.get(gi);if(!arr){arr=[];M.byGame.set(gi,arr)}
-    arr.push(t);
+    arr.push(t);M.ids.add(t.s);
   }
   M.has=M.byGame.size>0;
 }
@@ -625,6 +703,332 @@ function modelStats(){
   });
   return [...st.values()].map(s=>({id:s.id,name:srcName(s.id),n:s.n,ok:s.ok,acc:s.ok/s.n*100,bits:s.bn?s.bits/s.bn:null,mae:s.en?s.err/s.en:null}));
 }
+// PREDICTION SOURCES
+// For every game still to be played, the simulation needs an expected margin: home score minus away score,
+// so a positive number means the home side is expected to win. A "prediction source" supplies it:
+//   'all'      the average of every Squiggle model that tipped the game
+//   'top6'     the average of the 6 most accurate models so far (re-picked when the rounds-played slider moves)
+//   'm<id>'    one particular Squiggle model, for example 'm12'
+//   'ratings'  no models at all: club ratings plus home ground advantage
+//   anything listed in CUSTOM_MODELS below (your own model)
+// Model margins already include home ground advantage, so none is added on top of them.
+// Games the source has no opinion on stay NaN in MU and fall back to ratings. The finals always use ratings.
+
+// YOUR OWN MODEL (add it here later)
+// A custom model is an object with three parts:
+//   id       a short unique word, for example 'siren1'
+//   name     the name shown in the Prediction source dropdown on the Simulator tab
+//   predict  a function that takes a game number g and returns the expected margin (home minus away, in
+//            points) or null if it has no opinion about that game
+// predict can use the game arrays at the top of this file: GH[g] and GA[g] (team indexes), GR[g] (round index),
+// GDATE[g] (kickoff date text), HAS[g] and AM[g] (results, for games already played), and the other models' tips
+// through M.byGame.get(g). Delete the // to try the example below, which tips every home side to win by 5.
+//   CUSTOM_MODELS.push({id:'home5', name:'Home side by 5', predict:g=>5});
+const CUSTOM_MODELS=[];
+
+// A Squiggle model that only gives a win chance (no margin) is turned into a margin using this typical spread.
+const MODEL_SD=36;
+// Inverse of Phi: the z value whose bell-curve chance is p. Found by repeatedly halving the search range.
+function probit(p){let lo=-6,hi=6;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(Phi(mid)<p)lo=mid;else hi=mid}return (lo+hi)/2}
+// The margin one tip implies: its predicted margin if it has one, otherwise its win chance converted to a margin.
+// Returns null if the tip has neither.
+function tipMargin(t){
+  if(t.m!=null)return t.m;
+  if(t.p!=null)return MODEL_SD*probit(Math.min(0.99,Math.max(0.01,t.p/100)));
+  return null;
+}
+// Ids of the k most accurate models on the games played so far (ties broken by smaller margin error).
+// Returns null before any game has been played, which means "no filter, use every model".
+function topModelIds(k){
+  const st=modelStats();
+  if(!st.length)return null;
+  st.sort((a,b)=>b.acc-a.acc||(a.mae==null?1:b.mae==null?-1:a.mae-b.mae)||b.n-a.n);
+  return new Set(st.slice(0,k).map(x=>x.id));
+}
+// Refills MU (the expected margin for every game still to be played) from the chosen prediction source.
+// Call it whenever the source, the model-tip horizon or the rounds-played slider changes.
+function rebuildMU(){
+  rebuildWeather();
+  MU.fill(NaN);
+  const src=state.source;
+  if(src==='ratings')return;
+  const custom=CUSTOM_MODELS.find(x=>x.id===src);
+  let allow=null;                      // null means any model may contribute
+  if(!custom){
+    if(!M.has)return;
+    if(src==='top6')allow=topModelIds(6);
+    else if(src.charAt(0)==='m')allow=new Set([Number(src.slice(1))]);
+  }
+  for(let g=0;g<NG;g++){
+    // Skip games already played, and games further ahead than the horizon allows.
+    if(played(g)||GR[g]>=state.R+state.horizon)continue;
+    if(custom){const v=custom.predict(g);if(typeof v==='number'&&isFinite(v))MU[g]=v;continue}
+    const arr=M.byGame.get(g);if(!arr)continue;
+    let sum=0,n=0;
+    for(const t of arr){
+      if(allow&&!allow.has(t.s))continue;
+      const v=tipMargin(t);if(v!==null){sum+=v;n++}
+    }
+    if(n)MU[g]=sum/n;
+  }
+}
+// The choices for the Prediction source dropdown, as a list of {id, name}.
+function sourceOptions(){
+  const out=[];
+  if(M.has){
+    out.push({id:'all',name:'All models, averaged'},{id:'top6',name:'Top 6 models by accuracy'});
+    M.sources.filter(x=>M.ids.has(x.id)).sort((a,b)=>a.name<b.name?-1:1).forEach(x=>out.push({id:'m'+x.id,name:x.name}));
+  }
+  CUSTOM_MODELS.forEach(x=>out.push({id:x.id,name:x.name}));
+  out.push({id:'ratings',name:'Club ratings only (no models)'});
+  return out;
+}
+// OUR OWN MODEL: SirenSim v1
+// A rating system in the style of Elo (the chess rating idea), measured in points of margin.
+// Every club has a rating. The expected margin for a game is:
+//     home rating - away rating
+//     + home ground advantage (learned from the results so far)
+//     + rest effect: points per extra day of rest the home side has (difference capped at 4 days)
+//     + travel effect: points per 1,000 km the away side travels more than the home side
+// After the game, both ratings move toward what happened: each changes by k times the surprise (actual
+// margin minus expected margin), one up and one down. At the start of each new season every rating is
+// pulled back toward 0, because clubs change over the summer; "carry" is the share that is kept.
+// Predictions are WALK-FORWARD: a game is predicted before its own result is known, using only earlier
+// games, so the backtest is honest. The starting settings are sensible guesses, not fitted to the data.
+// If you tune the sliders on the same seasons you then test on, the scores will flatter the model.
+const MODEL_DEFAULTS={k:0.07,carry:0.7,rest:0.5,travel:1.0};
+// The current settings. The sliders on the Backtest tab change these.
+const model=Object.assign({},MODEL_DEFAULTS);
+// Fixed details of the model (not sliders).
+const MARGIN_CAP=90;                  // a blowout counts as at most this many points when ratings are updated
+const HGA_PRIOR=6, HGA_PRIOR_N=200;   // home advantage starts at 6 points, as if 200 games had averaged 6, then learns
+const HOME_BASELINE=6;                // the "always tip the home side" baseline predicts a 6 point home win
+const WET_MM=1;                       // a game counts as wet when at least this much rain fell in its first three hours
+
+// THE TIMELINE
+// Every game of every loaded season in playing order (past seasons from history.json, then this season).
+// Each entry:
+//   y season year      h, a team indexes      u kickoff (unix seconds)      res home margin (null if not played)
+//   tot total points   restH, restA days since each side last played    dH, dA km each side travels to the ground
+//   wx [temp C, rain mm, wind km/h] or null     tips list of model tips    cur game number in this season (-1 for past seasons)
+// TLI maps this season's game number g to its position in TL.
+let TL=[],TLI=new Int32Array(0);
+// OURF = our model's walk-forward run using every result we have (for the backtest and leaderboard).
+// OURR = the same run but only using results before the rounds-played slider (for predicting games still to be played).
+// WFIT = what the weather did to scoring, fitted from history (null until there is enough weather data).
+let OURF=null,OURR=null,WFIT=null;
+
+// Straight-line distance in km between two points on the earth (the haversine formula).
+function km(lat1,lon1,lat2,lon2){
+  const r=Math.PI/180,dLat=(lat2-lat1)*r,dLon=(lon2-lon1)*r;
+  const x=Math.sin(dLat/2)**2+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLon/2)**2;
+  return 12742*Math.asin(Math.sqrt(x));
+}
+// Turns "2026-03-14 19:30:00" into unix seconds (only differences between games matter, so the time zone does not).
+function parseUnix(s){
+  const m=/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(s||''));
+  return m?Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])/1000:NaN;
+}
+// Puts games in playing order: by round, then date, then id (the same order buildReal uses).
+function cmpGame(a,b){return a.round-b.round||(a.date<b.date?-1:a.date>b.date?1:0)||a.id-b.id}
+// Builds TL from the history file (may be null) plus this season. Also works out each game's rest days and travel,
+// which come from the fixture alone, so they are known even for games not yet played.
+function buildTimeline(hist){
+  TL=[];OURF=null;OURR=null;WFIT=null;
+  const seasons=[];
+  if(hist&&Array.isArray(hist.seasons)){
+    for(const s of hist.seasons){
+      if(!s||!Array.isArray(s.games)||!s.games.length)continue;
+      // history tips are short lists [game id, model id, home win chance, home margin]
+      const tipsBy=new Map();
+      for(const a of (s.tips||[])){
+        let l=tipsBy.get(a[0]);if(!l){l=[];tipsBy.set(a[0],l)}
+        l.push({s:a[1],p:a[2],m:a[3]});
+      }
+      seasons.push({y:s.year,games:s.games.slice().sort(cmpGame),tipsBy,cur:false});
+    }
+    seasons.sort((a,b)=>a.y-b.y);
+  }
+  const cy=(state.meta&&state.meta.year)||0;
+  // Only seasons before this one count as history, which guards against a stale file.
+  const all=seasons.filter(s=>s.y<cy);
+  all.push({y:cy,games:GAMES_SORTED,tipsBy:null,cur:true});
+  TLI=new Int32Array(NG).fill(-1);
+  const lastU=new Float64Array(NT).fill(NaN),lastY=new Int32Array(NT).fill(-1);
+  for(const s of all){
+    s.games.forEach((g,k)=>{
+      if(!(g.h>=1&&g.h<=NT&&g.a>=1&&g.a<=NT))return;
+      const h=g.h-1,a=g.a-1;
+      const u=(typeof g.u==='number'&&isFinite(g.u))?g.u:parseUnix(g.date);
+      // Travel: distance from each club's base to the ground. If the ground is unknown, assume it is the home club's city.
+      const vl=(Array.isArray(g.vl)&&g.vl.length===2)?g.vl:null,bh=TEAM_BASE[h],ba=TEAM_BASE[a];
+      const dH=vl?km(bh[0],bh[1],vl[0],vl[1]):0;
+      const dA=vl?km(ba[0],ba[1],vl[0],vl[1]):km(ba[0],ba[1],bh[0],bh[1]);
+      // Rest: days since the club's previous game this season (7 for the first game or when the date is unknown).
+      let rh=7,ra=7;
+      if(lastY[h]===s.y&&isFinite(lastU[h])&&isFinite(u))rh=Math.max(3,Math.min(14,(u-lastU[h])/86400));
+      if(lastY[a]===s.y&&isFinite(lastU[a])&&isFinite(u))ra=Math.max(3,Math.min(14,(u-lastU[a])/86400));
+      if(isFinite(u)){lastU[h]=u;lastU[a]=u}
+      lastY[h]=s.y;lastY[a]=s.y;
+      const done=g.done&&g.hs!=null&&g.as!=null;
+      TL.push({y:s.y,h,a,u,res:done?g.hs-g.as:null,tot:done?g.hs+g.as:null,restH:rh,restA:ra,dH,dA,
+        wx:Array.isArray(g.wx)?g.wx:null,cur:s.cur?k:-1,
+        tips:s.cur?(M.byGame.get(k)||null):(s.tipsBy.get(g.id)||null)});
+      if(s.cur)TLI[k]=TL.length-1;
+    });
+  }
+}
+// Runs our model through the whole timeline and returns { pred, rat }: pred[i] is the expected home margin for
+// timeline game i (made before its result), rat is the final club ratings. cutR hides this season's results from
+// round index cutR onward (pass Infinity to use everything), which is how the rounds-played slider rewinds the model.
+function runModel(cutR){
+  const rat=new Float64Array(NT),pred=new Float64Array(TL.length).fill(NaN);
+  let hs=0,hn=0,curYear=null;
+  for(let i=0;i<TL.length;i++){
+    const e=TL[i];
+    // New season: pull every rating back toward 0.
+    if(e.y!==curYear){if(curYear!==null)for(let t=0;t<NT;t++)rat[t]*=model.carry;curYear=e.y}
+    const hga=(hs+HGA_PRIOR*HGA_PRIOR_N)/(hn+HGA_PRIOR_N);
+    const rd=Math.max(-4,Math.min(4,e.restH-e.restA));
+    const E=rat[e.h]-rat[e.a]+hga+model.rest*rd+model.travel*(e.dA-e.dH)/1000;
+    pred[i]=E;
+    // Only learn from games whose result is known at this point.
+    if(e.res!=null&&(e.cur<0||GR[e.cur]<cutR)){
+      const A=Math.max(-MARGIN_CAP,Math.min(MARGIN_CAP,e.res));
+      const err=A-E;
+      rat[e.h]+=model.k*err;rat[e.a]-=model.k*err;
+      // Home advantage learns from what is left after the ratings, rest and travel are taken out.
+      hs+=A-(E-hga);hn++;
+    }
+  }
+  return{pred,rat};
+}
+// Our model's expected home margin for game g of this season (from the full run), or NaN if there is none.
+function ourPred(g){const i=TLI[g];return(OURF&&i>=0)?OURF.pred[i]:NaN}
+// Reruns the model and the weather fit. Call after the model settings change or the data loads.
+function refitModel(){OURF=runModel(Infinity);OURR=runModel(state.R);WFIT=fitWeather()}
+
+// WEATHER EFFECTS
+// Solves a 3 by 3 set of linear equations (used for the weather fit). Returns null if it cannot be solved.
+function solve3(A,B){
+  const m=A.map((r,i)=>r.concat([B[i]]));
+  for(let c=0;c<3;c++){
+    let p=c;for(let r=c+1;r<3;r++)if(Math.abs(m[r][c])>Math.abs(m[p][c]))p=r;
+    if(Math.abs(m[p][c])<1e-9)return null;
+    const t=m[c];m[c]=m[p];m[p]=t;
+    for(let r=0;r<3;r++)if(r!==c){const f=m[r][c]/m[c][c];for(let k=c;k<4;k++)m[r][k]-=f*m[c][k]}
+  }
+  return[m[0][3]/m[0][0],m[1][3]/m[1][1],m[2][3]/m[2][2]];
+}
+// Learns what weather did to scoring, from every played game that has weather:
+//   b = [base total, points per mm of rain, points per km/h of wind] from a straight-line fit of total points on rain and wind
+//   dry / wet = number of games, average total, and how far our model's margin missed (spread) in dry and wet games
+//   ratio = wet spread divided by dry spread, limited to 0.9 to 1.3, used to make wet games more (or less) random in the sim
+// Returns null when there are fewer than 60 games with weather.
+function fitWeather(){
+  const X=[],Y=[],idx=[];
+  for(let i=0;i<TL.length;i++){const e=TL[i];if(e.res==null||!e.wx)continue;X.push([1,e.wx[1],e.wx[2]]);Y.push(e.tot);idx.push(i)}
+  if(X.length<60)return null;
+  const A=[[0,0,0],[0,0,0],[0,0,0]],B=[0,0,0];
+  for(let n=0;n<X.length;n++)for(let a=0;a<3;a++){B[a]+=X[n][a]*Y[n];for(let c=0;c<3;c++)A[a][c]+=X[n][a]*X[n][c]}
+  const b=solve3(A,B);if(!b)return null;
+  const first=TL[0].y,st={dry:{n:0,tot:0,rn:0,s2:0},wet:{n:0,tot:0,rn:0,s2:0}};
+  for(const i of idx){
+    const e=TL[i],w=e.wx[1]>=WET_MM?st.wet:st.dry;
+    w.n++;w.tot+=e.tot;
+    if(OURF&&e.y!==first){const r=e.res-OURF.pred[i];w.rn++;w.s2+=r*r}
+  }
+  const fin=w=>({n:w.n,tot:w.n?w.tot/w.n:null,sd:w.rn?Math.sqrt(w.s2/w.rn):null,rn:w.rn});
+  const dry=fin(st.dry),wet=fin(st.wet);
+  const ratio=(wet.rn>=30&&dry.sd)?Math.max(0.9,Math.min(1.3,wet.sd/dry.sd)):1;
+  return{n:X.length,b,dry,wet,ratio};
+}
+// Fills MT (expected total) and SDM (how random) for the games still to be played, from their weather.
+// Only games with weather get changed, which in practice means the next week or so of fixtures (the forecast window).
+function rebuildWeather(){
+  MT.fill(NaN);SDM.fill(1);
+  if(!state.useWeather||!WFIT)return;
+  for(let g=0;g<NG;g++){
+    if(played(g))continue;
+    const i=TLI[g];if(!(i>=0))continue;
+    const w=TL[i].wx;if(!w)continue;
+    MT[g]=Math.max(120,Math.min(210,WFIT.b[0]+WFIT.b[1]*w[1]+WFIT.b[2]*w[2]));
+    if(w[1]>=WET_MM)SDM[g]=WFIT.ratio;
+  }
+}
+
+// SCORING PREDICTORS
+// A tally for one predictor: games, correct tips, and the sums needed for bits and margin error.
+function newAcc(){return{n:0,ok:0,bn:0,bits:0,en:0,err:0}}
+// Marks one prediction against the real result res (home margin).
+//   homeTip  true if it tipped the home side      p  its home win chance (0 to 100) or null
+//   m        its predicted home margin or null
+function scoreInto(a,homeTip,p,m,res){
+  a.n++;if(res===0||(res>0)===homeTip)a.ok++;
+  if(p!=null){const q=Math.min(0.999,Math.max(0.001,p/100));a.bn++;a.bits+=res>0?1+Math.log2(q):res<0?1+Math.log2(1-q):1+0.5*Math.log2(q*(1-q))}
+  if(m!=null){a.en++;a.err+=Math.abs(m-res)}
+}
+// Turns a tally into a table row: accuracy %, bits per game, average margin error.
+function accRow(id,name,a,own){return{id,name,own:!!own,n:a.n,ok:a.ok,acc:a.n?a.ok/a.n*100:0,bits:a.bn?a.bits/a.bn:null,mae:a.en?a.err/a.en:null}}
+// Did this model tip the home side? Uses its win chance first, then its margin, then the team it named.
+function tipHome(e,t){return t.p!=null?t.p>=50:(t.m!=null?t.m>=0:(t.t-1)===e.h)}
+// Scores the average of all models' tips for one timeline game. Does nothing if nobody tipped the game.
+function consensusInto(acc,e){
+  if(!e.tips||!e.tips.length)return;
+  let ps=0,pn=0,ms=0,mn=0;
+  for(const t of e.tips){if(t.p!=null){ps+=t.p;pn++}if(t.m!=null){ms+=t.m;mn++}}
+  if(!pn&&!mn)return;
+  scoreInto(acc,pn?ps/pn>=50:ms/mn>=0,pn?ps/pn:null,mn?ms/mn:null,e.res);
+}
+// Seasons that can be scored: every season with results except the first one, which is only used to warm the model up.
+function evalYears(){
+  if(!TL.length)return[];
+  const first=TL[0].y,ys=new Set();
+  for(const e of TL)if(e.res!=null&&e.y!==first)ys.add(e.y);
+  return[...ys].sort((a,b)=>a-b);
+}
+// Scores every predictor on the chosen season (or 'all'): each Squiggle model, the consensus, our model and an
+// "always tip the home side" baseline. Returns table rows sorted best first.
+function backtestRows(season){
+  const first=TL.length?TL[0].y:0,acc=new Map();
+  const get=k=>{let a=acc.get(k);if(!a){a=newAcc();acc.set(k,a)}return a};
+  for(let i=0;i<TL.length;i++){
+    const e=TL[i];
+    if(e.res==null||e.y===first||(season!=='all'&&e.y!==season))continue;
+    if(e.tips)for(const t of e.tips)scoreInto(get(t.s),tipHome(e,t),t.p,t.m,e.res);
+    consensusInto(get('cons'),e);
+    const E=OURF.pred[i];
+    scoreInto(get('ours'),E>=0,Phi(E/MODEL_SD)*100,E,e.res);
+    scoreInto(get('home'),true,null,HOME_BASELINE,e.res);
+  }
+  const rows=[];
+  acc.forEach((a,k)=>{
+    if(typeof k==='number'){if(a.n>=20)rows.push(accRow(k,srcName(k),a,false))}
+    else if(k==='cons')rows.push(accRow(k,'Consensus of all models',a,false));
+    else if(k==='ours')rows.push(accRow(k,'SirenSim v1 (ours)',a,true));
+    else rows.push(Object.assign(accRow(k,'Always tip the home side',a,false),{base:true}));
+  });
+  rows.sort((a,b)=>b.acc-a.acc||(a.mae==null?1:b.mae==null?-1:a.mae-b.mae));
+  return rows;
+}
+// Extra leaderboard rows for the Models tab: the consensus and our model, scored on this season's games played so far
+// (so the rounds-played slider rewinds them too).
+function extraRows(){
+  if(!OURF)return[];
+  const cons=newAcc(),ours=newAcc();
+  for(let g=0;g<NG;g++){
+    if(!played(g))continue;
+    const i=TLI[g];if(!(i>=0))continue;
+    const e=TL[i];
+    consensusInto(cons,e);
+    const E=OURF.pred[i];
+    scoreInto(ours,E>=0,Phi(E/MODEL_SD)*100,E,e.res);
+  }
+  const rows=[];
+  if(cons.n)rows.push(accRow('cons','Consensus of all models',cons,false));
+  if(ours.n)rows.push(accRow('ours','SirenSim v1 (ours)',ours,true));
+  return rows;
+}
 // ===== end of the engine: nothing above this line touches the web page =====
 /*END*/
 
@@ -636,13 +1040,15 @@ function modelStats(){
 // Short helper: $("#id") finds one element on the page.
 const $=s=>document.querySelector(s);
 // Tab names. Each matches a link href (#ladder, #heatmap...) and a section id (view-ladder, view-heatmap...).
-const TABS=['ladder','heatmap','club','models','simulator','tools'];
+const TABS=['ladder','heatmap','club','models','backtest','simulator','tools'];
 // Formats a percentage for display: one decimal place, "<0.1" for tiny values, and a dash for zero.
 const f1=p=>p>=99.95?'100':p>=0.05?p.toFixed(1):p>0?'<0.1':'–';
 // Formats a rating with a plus or minus sign, for example +7 or -12.
 const sgn=v=>{const r=Math.round(v);return (r>0?'+':r<0?'−':'')+Math.abs(r)};
 // Short club code from an index, for example 2 becomes "CAR".
 const code=i=>TEAMS[i].c;
+// Makes text safe to put inside HTML (model names come from outside, so they are escaped).
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
 // Turns a round index into the real round number (index 0 is usually Round 1).
 const rl=ri=>ROUNDS[ri];
 // Percentage chance that club i finishes in ladder position p (0 = first), from the latest simulation.
@@ -781,7 +1187,7 @@ function renderClub(){
   let fx='';
   for(let g=0;g<NG;g++){
     if(!(GH[g]===i||GA[g]===i)||played(g))continue;
-    const home=GH[g]===i,opp=home?GA[g]:GH[g],wp=home?winProb(i,opp):1-winProb(GH[g],i),f=state.forced[g];
+    const home=GH[g]===i,opp=home?GA[g]:GH[g],wp=home?winProbGame(g):1-winProbGame(g),f=state.forced[g];
     const mode=f===0?0:((f===1)===home?1:2);
     const btn=(v,l)=>'<button type="button" data-g="'+g+'" data-v="'+v+'" aria-pressed="'+(mode===v)+'">'+l+'</button>';
     fx+='<li class="fx"><span class="rd">Rd '+rl(GR[g])+'</span><span class="opp">'+(home?'v ':'@ ')+TEAMS[opp].n+'<small>'+code(opp)+'</small></span>'
@@ -807,14 +1213,14 @@ function renderModels(){
   const has=M.has;
   $('#modelsEmpty').hidden=has;$('#modelsBody').hidden=!has;
   if(!has)return;
-  const stats=sortStats(modelStats());
+  const stats=sortStats(modelStats().concat(extraRows()));
   const gamesPlayed=(()=>{let n=0;for(let g=0;g<NG;g++)if(played(g))n++;return n})();
   $('#lbNote').textContent=gamesPlayed?('Scored on '+gamesPlayed+' completed games. Accuracy counts draws as correct. Bits reward confident right tips and punish confident wrong ones, higher is better. Margin error is how many points the predicted margin missed by on average, lower is better.'):'No games have been played at this point in the season, so there is nothing to score yet.';
   const accs=stats.map(s=>s.acc);const lo=50,hi=Math.max(lo+1,Math.max.apply(null,accs.concat([lo+1])));
   const head=(k,l)=>'<th'+(state.lbSort===k?' aria-sort="descending"':'')+'><button type="button" data-sort="'+k+'">'+l+'</button></th>';
   let h='<table class="tbl narrow"><thead><tr><th>#</th><th>Model</th>'+head('n','Tips')+'<th>Correct</th>'+head('acc','Accuracy')+head('bits','Bits')+head('mae','Margin error')+'</tr></thead><tbody>';
   stats.forEach((s,k)=>{
-    h+='<tr><td>'+(k+1)+'</td><td><span class="mname">'+s.name+'</span></td><td>'+s.n+'</td><td>'+s.ok+'</td>'
+    h+='<tr'+(s.own?' class="own"':'')+'><td>'+(k+1)+'</td><td><span class="mname">'+esc(s.name)+'</span></td><td>'+s.n+'</td><td>'+s.ok+'</td>'
       +'<td class="pc" style="--w:'+Math.max(0,Math.min(100,(s.acc-lo)/(hi-lo)*100))+'%"><span>'+s.acc.toFixed(1)+'%</span></td>'
       +'<td>'+(s.bits==null?'–':s.bits.toFixed(2))+'</td><td>'+(s.mae==null?'–':s.mae.toFixed(1))+'</td></tr>';
   });
@@ -826,7 +1232,7 @@ function renderModels(){
 function renderTips(stats){
   stats=stats||sortStats(modelStats());
   const ri=state.tipRound;
-  const ranked=sortStats(stats.length?stats:[]).map(s=>s.id);
+  const ranked=sortStats(stats.length?stats:[]).map(s=>s.id).filter(id=>typeof id==='number');
   const rest=M.sources.map(s=>s.id).filter(id=>ranked.indexOf(id)<0);
   const all=ranked.concat(rest);
   const ids=state.tipShow==='all'?all:all.slice(0,+state.tipShow);
@@ -836,7 +1242,9 @@ function renderTips(stats){
   for(let g=0;g<NG;g++){
     if(GR[g]!==ri)continue;
     const hh=GH[g],aa=GA[g],pl=played(g),res=AM[g];
-    const sub=pl?(((AT[g]+res)/2)+' – '+((AT[g]-res)/2)):fmtDate(GDATE[g]);
+    // Under each match: the score if played, otherwise the date, plus the weather when we have it.
+    const wxg=(TLI[g]>=0&&TL[TLI[g]])?TL[TLI[g]].wx:null;
+    const sub=(pl?(((AT[g]+res)/2)+' – '+((AT[g]-res)/2)):fmtDate(GDATE[g]))+(wxg?' · '+wxg[1]+'mm '+Math.round(wxg[2])+'km/h':'');
     h+='<tr><td class="mh"><span class="vs">'+code(hh)+' v '+code(aa)+'</span><small>'+sub+'</small></td>';
     const arr=M.byGame.get(g)||[];
     const by=new Map(arr.map(t=>[t.s,t]));
@@ -848,7 +1256,8 @@ function renderTips(stats){
     const ps=arr.filter(t=>t.p!=null).map(t=>t.p);
     if(ps.length){const pm=ps.reduce((x,y)=>x+y,0)/ps.length,ht=pm>=50;h+=mk(ht,ht?pm:100-pm)}
     else h+='<td class="empty">–</td>';
-    const sp=winProb(hh,aa)*100,sht=sp>=50;
+    // SirenSim column: our model's chance for the home side (falls back to plain ratings if the model has no number).
+    const ep=ourPred(g),sp=(ep===ep?Phi(ep/MODEL_SD):winProb(hh,aa))*100,sht=sp>=50;
     h+=mk(sht,sht?sp:100-sp).replace('<td class="','<td class="sim ');
     ids.forEach(id=>{
       const t=by.get(id);
@@ -860,8 +1269,66 @@ function renderTips(stats){
   }
   $('#tipsBox').innerHTML=h+'</tbody></table>';
 }
+// BACKTEST TAB
+// btSeason is the season chosen in the dropdown: 'all' or a year.
+let btSeason='all';
+// Moves the four model sliders (and their read-outs) to match the current model settings.
+function syncModelSliders(){
+  $('#mK').value=model.k;$('#mKOut').textContent=model.k.toFixed(3);
+  $('#mCarry').value=model.carry;$('#mCarryOut').textContent=Math.round(model.carry*100)+'%';
+  $('#mRest').value=model.rest;$('#mRestOut').textContent=model.rest.toFixed(1)+' pts';
+  $('#mTravel').value=model.travel;$('#mTravelOut').textContent=model.travel.toFixed(1)+' pts';
+}
+// One-time setup of the Backtest tab after the data loads.
+function setupBacktestUI(){syncModelSliders();renderBacktest()}
+// Draws the Backtest tab: the scoreboard for the chosen season, a table by season, and the weather findings.
+// Shows a message instead when there are no past seasons to replay.
+function renderBacktest(){
+  const yrs=evalYears();
+  $('#btEmpty').hidden=yrs.length>0;$('#btBody').hidden=!yrs.length;
+  if(!yrs.length)return;
+  const sel=$('#btSeason');
+  if(sel.options.length!==yrs.length+1){
+    sel.innerHTML='<option value="all">All seasons ('+yrs[0]+' to '+yrs[yrs.length-1]+')</option>'+yrs.map(y=>'<option value="'+y+'">'+y+'</option>').join('');
+    sel.value=btSeason;
+  }
+  const key=btSeason==='all'?'all':Number(btSeason);
+  const rows=backtestRows(key);
+  let h='<table class="tbl narrow"><thead><tr><th>#</th><th>Predictor</th><th>Games</th><th>Accuracy (±95%)</th><th>Bits</th><th>Margin error</th></tr></thead><tbody>';
+  rows.forEach((r,k)=>{
+    const ci=r.n?1.96*Math.sqrt(r.acc/100*(1-r.acc/100)/r.n)*100:0;
+    h+='<tr'+(r.own?' class="own"':r.base?' class="base"':'')+'><td>'+(k+1)+'</td><td><span class="mname">'+esc(r.name)+'</span></td><td>'+r.n+'</td>'
+      +'<td>'+r.acc.toFixed(1)+'% <small>±'+ci.toFixed(1)+'</small></td><td>'+(r.bits==null?'–':r.bits.toFixed(2))+'</td><td>'+(r.mae==null?'–':r.mae.toFixed(1))+'</td></tr>';
+  });
+  $('#btTable').innerHTML=h+'</tbody></table>';
+  $('#btNote').textContent='The ± is the 95% margin of error from the number of games alone, so gaps smaller than it are noise. Bits reward confident right tips and punish confident wrong ones (higher is better). Margin error is the average miss in points (lower is better). A model that only started tipping recently shows fewer games. SirenSim v1 starts each season with its ratings carried over and learns as the season goes.';
+  // By season: our model against the consensus and the best single model.
+  let t='<table class="tbl narrow"><thead><tr><th>Season</th><th>Games</th><th>SirenSim v1</th><th>Consensus</th><th>Best single model</th></tr></thead><tbody>';
+  yrs.forEach(y=>{
+    const rs=backtestRows(y),ours=rs.find(r=>r.id==='ours'),cons=rs.find(r=>r.id==='cons');
+    const best=rs.filter(r=>typeof r.id==='number')[0];
+    t+='<tr><td>'+y+'</td><td>'+(ours?ours.n:'–')+'</td><td>'+(ours?ours.acc.toFixed(1)+'%':'–')+'</td><td>'+(cons?cons.acc.toFixed(1)+'%':'–')+'</td><td>'+(best?esc(best.name)+' '+best.acc.toFixed(1)+'%':'–')+'</td></tr>';
+  });
+  $('#btSeasons').innerHTML=t+'</tbody></table>';
+  renderWeatherBox();
+}
+// What the weather did to games, from history: dry against wet games, and the fitted effect of rain and wind.
+function renderWeatherBox(){
+  const box=$('#wxBox');
+  if(!WFIT){box.innerHTML='<p class="note">Not enough games with weather yet (at least 60 are needed). Weather is downloaded by the data script from Open-Meteo.</p>';return}
+  const row=(name,d)=>'<tr><td></td><td><span class="mname">'+name+'</span></td><td>'+d.n+'</td><td>'+(d.tot==null?'–':d.tot.toFixed(1))+'</td><td>'+(d.sd==null?'–':d.sd.toFixed(1))+'</td></tr>';
+  let h='<table class="tbl narrow"><thead><tr><th></th><th>Weather</th><th>Games</th><th>Average total points</th><th>Margin miss (points)</th></tr></thead><tbody>'
+    +row('Dry (under '+WET_MM+' mm of rain)',WFIT.dry)+row('Wet ('+WET_MM+' mm or more)',WFIT.wet)+'</tbody></table>';
+  const sg=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(2);
+  box.innerHTML='<div class="scroll">'+h+'</div><p class="note">From '+WFIT.n+' played games with weather. Each extra mm of rain in the first three hours changes the total by '+sg(WFIT.b[1])+' points, and each extra 10 km/h of wind by '+sg(WFIT.b[2]*10)+' points. Wet games are '+(WFIT.ratio>1.005?'harder':'no easier')+' to predict by a factor of '+WFIT.ratio.toFixed(2)+' (limited to between 0.9 and 1.3). The simulator uses these numbers for upcoming games that have a forecast, if "Use weather" is ticked.</p>';
+}
+// Called whenever a model setting changes: rerun the model, refresh everything that depends on it, and re-simulate.
+function onModelChange(){
+  if(!OURF)return;
+  refitModel();rebuildMU();renderSimSource();renderBacktest();renderModels();renderClub();queueRun(400);
+}
 // Redraws every tab. Called whenever a simulation finishes.
-function renderAll(){renderHeader();renderLadder();renderHeat();renderClub();renderModels()}
+function renderAll(){renderHeader();renderLadder();renderHeat();renderClub();renderModels();renderBacktest()}
 
 // TABS: the page uses the URL #hash to decide which tab to show, so tabs can be bookmarked.
 // Shows the tab named in the URL (defaults to ladder) and hides the others.
@@ -877,6 +1344,15 @@ window.addEventListener('hashchange',showTab);
 function syncSliders(){
   TEAMS.forEach((t,i)=>{const el=$('#rt-'+i);if(el){el.value=Math.round(state.rt[i]);$('#rto-'+i).textContent=sgn(state.rt[i])}});
 }
+// Simulator tab: the small badge beside the source dropdown. Counts how many of the games still to be
+// played the chosen source actually has a prediction for. The rest use club ratings.
+function renderSimSource(){
+  let left=0,covered=0;
+  for(let g=0;g<NG;g++){if(played(g))continue;left++;if(MU[g]===MU[g])covered++}
+  $('#srcChip').textContent=!left?'No games left to predict':state.source==='ratings'?'Ratings predict all '+left+' games left':'Source covers '+covered+' of '+left+' games left';
+  // The weather box can only be ticked once we have learned an effect from enough games with weather.
+  $('#useWx').disabled=!WFIT;
+}
 // The round shown by default on the Models tab: the next round still to be played.
 function defaultTipRound(){return Math.max(0,Math.min(state.R,NR-1))}
 // Fills in everything that depends on which season was loaded: club dropdowns, rating sliders,
@@ -890,6 +1366,12 @@ function setupUI(){
   $('#sliders').innerHTML=sl;
   $('#hga').value=state.hga;$('#sd').value=state.sd;
   $('#hgaOut').textContent='+'+state.hga;$('#sdOut').textContent=state.sd;
+  // Prediction source dropdown. With no model tips loaded the only choice is the club ratings, so it is switched off.
+  const so=sourceOptions();
+  $('#source').innerHTML=so.map(o=>'<option value="'+esc(o.id)+'">'+esc(o.name)+'</option>').join('');
+  $('#source').value=state.source;
+  $('#horizon').value=state.horizon>=1e9?'all':String(state.horizon);
+  $('#source').disabled=$('#horizon').disabled=so.length<2;
   const rs=$('#round');rs.max=NR;rs.value=state.R;
   state.tipRound=defaultTipRound();
   $('#tipRound').innerHTML=ROUNDS.map((r,i)=>'<option value="'+i+'">Round '+r+'</option>').join('');
@@ -898,12 +1380,14 @@ function setupUI(){
   if(state.real){
     const when=state.meta.updatedAt?new Date(state.meta.updatedAt).toLocaleString('en-AU',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):'';
     chip.className='chip live';chip.textContent='Live data '+(state.meta.year||'')+(when?' · updated '+when:'');
-    note.innerHTML='<b>About the data.</b> Fixtures, scores and model tips come from the Squiggle API and refresh automatically. Club ratings are fitted from this season’s results (average margin, adjusted for opponent strength and home advantage), so early in a season they are noisy. Edit them in Simulator to apply your own view.';
-    $('#simNote').textContent='Ratings start from this season’s results and refit when you move the rounds-played slider, until you edit one yourself. Reset ratings refits them. Higher volatility means more upsets. Finals are played at neutral venues.';
+    note.innerHTML='<b>About the data.</b> Fixtures, scores and model tips come from the Squiggle API and refresh automatically. Club ratings are fitted from this season’s results (average margin, adjusted for opponent strength and home advantage), so early in a season they are noisy. Edit them in Simulator to apply your own view. Weather comes from Open-Meteo.com (CC BY 4.0).';
+    $('#simNote').textContent='Games the chosen source has tipped use its expected margin, which already includes home ground advantage. All other games, and the finals, use the club ratings plus the home ground advantage setting. Ratings start from this season’s results and refit when you move the rounds-played slider, until you edit one yourself. Reset ratings refits them. Higher volatility means more upsets. When you rewind the season, models still supply tips for every remaining game, although live they only tip a round or two ahead, so rewound odds look sharper than they would have live. Use Use model tips for to limit that.';
   }else{
     chip.className='chip warn';chip.textContent='Example season';
+    $('#simNote').textContent='No model tips are loaded, so every game uses the club ratings plus home ground advantage. Higher volatility means more upsets. Finals are played at neutral venues.';
     note.innerHTML='<b>About the data.</b> The 18 clubs and their ratings are illustrative starting values, and the season shown so far is one example run from those ratings. It is not the official fixture or real results. Edit the ratings in Simulator to model your own view.';
   }
+  setupBacktestUI();
 }
 // EVENT LISTENERS: what happens when the user touches a control.
 // Rounds-played slider: rewind the season. With real data and no hand edits, ratings are refitted for that point in the season.
@@ -911,6 +1395,8 @@ $('#round').addEventListener('input',e=>{
   state.R=+e.target.value;
   if(state.real&&!state.manual){state.rt=fitRatings();syncSliders()}
   state.tipRound=defaultTipRound();$('#tipRound').value=String(state.tipRound);
+  if(OURF)OURR=runModel(state.R);
+  rebuildMU();renderSimSource();
   renderHeader();queueRun(250);
 });
 // Seasons-per-run dropdown.
@@ -938,6 +1424,19 @@ $('#sliders').addEventListener('input',e=>{
 // Home ground advantage and game volatility sliders.
 $('#hga').addEventListener('input',e=>{state.hga=+e.target.value;$('#hgaOut').textContent='+'+state.hga;queueRun(350)});
 $('#sd').addEventListener('input',e=>{state.sd=+e.target.value;$('#sdOut').textContent=state.sd;queueRun(350)});
+// Backtest tab: season dropdown, the four model sliders and the reset button.
+$('#btSeason').addEventListener('change',e=>{btSeason=e.target.value;renderBacktest()});
+['mK','mCarry','mRest','mTravel'].forEach(id=>$('#'+id).addEventListener('input',e=>{
+  const key={mK:'k',mCarry:'carry',mRest:'rest',mTravel:'travel'}[id];
+  model[key]=Number(e.target.value);syncModelSliders();onModelChange();
+}));
+$('#mReset').addEventListener('click',()=>{Object.assign(model,MODEL_DEFAULTS);syncModelSliders();onModelChange()});
+// "Use weather" tick box on the Simulator tab.
+$('#useWx').addEventListener('change',e=>{state.useWeather=e.target.checked;rebuildMU();queueRun(0)});
+// Prediction source dropdown (Simulator tab): rebuild the expected margin for each game, update the Club tab win chances, re-run.
+$('#source').addEventListener('change',e=>{state.source=e.target.value;rebuildMU();renderSimSource();renderClub();queueRun(0)});
+// "Use model tips for" dropdown: only let models predict the next few rounds. Keeps a rewound season realistic.
+$('#horizon').addEventListener('change',e=>{state.horizon=e.target.value==='all'?1e9:Number(e.target.value);rebuildMU();renderSimSource();renderClub();queueRun(0)});
 // Reset ratings: back to fitted ratings (real data) or the example ratings, and default advantage and volatility.
 $('#resetRatings').addEventListener('click',()=>{
   state.manual=false;state.hga=7;state.sd=36;
@@ -1003,11 +1502,28 @@ async function loadData(){
     return j&&Array.isArray(j.games)&&j.games.length?j:null;
   }catch(e){return null}
 }
+// Downloads data/history.json (past seasons). Returns null if it is missing, so the Backtest tab simply stays empty.
+async function loadHistory(){
+  try{
+    const res=await fetch('data/history.json',{cache:'no-cache'});
+    if(!res.ok)return null;
+    const j=await res.json();
+    return j&&Array.isArray(j.seasons)&&j.seasons.length?j:null;
+  }catch(e){return null}
+}
 // If anything goes wrong while reading real data, we log it to the browser console and use the example season instead of showing a blank page.
-loadData().then(data=>{
+Promise.all([loadData(),loadHistory()]).then(([data,hist])=>{
   try{if(data){buildReal(data);setupModels(data)}else buildExample()}
-  catch(e){console.error('Could not use season.json, using example data.',e);buildExample()}
-  setupUI();showTab();run(state.n,true);
+  catch(e){console.error('Could not use season.json, using example data.',e);M.has=false;M.byGame=new Map();M.ids=new Set();buildExample()}
+  // Default to the models when tips exist. Otherwise the club ratings are the only choice.
+  // Real data: build the timeline of every loaded season and add our own model as a choice in the Prediction source dropdown.
+  if(state.real){
+    try{buildTimeline(hist)}catch(e){console.error('Could not use history.json, using this season only.',e);buildTimeline(null)}
+    if(!CUSTOM_MODELS.some(x=>x.id==='siren1'))CUSTOM_MODELS.push({id:'siren1',name:'SirenSim v1 (our model)',predict:g=>{const i=TLI[g];return(OURR&&i>=0)?OURR.pred[i]:null}});
+    refitModel();
+  }
+  state.source=M.has?'all':'ratings';
+  setupUI();rebuildMU();renderSimSource();showTab();run(state.n,true);
 });
 </script>
 </body>

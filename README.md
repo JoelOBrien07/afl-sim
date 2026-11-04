@@ -33,9 +33,9 @@ After that it refreshes itself every 6 hours. GitHub pauses scheduled workflows 
 | Path | What it does |
 |---|---|
 | `site/index.html` | The whole website in one file (styles, page and script, no build step) |
-| `scripts/fetch-data.mjs` | Downloads games, results and model tips from Squiggle and writes `site/data/season.json` |
+| `scripts/fetch-data.mjs` | Downloads games, results and model tips from Squiggle, plus weather from Open-Meteo, and writes `site/data/season.json` (this season) and `site/data/history.json` (past seasons) |
 | `.github/workflows/update-data.yml` | Runs the script on a schedule and publishes the site |
-| `.gitignore` | Keeps the generated data file out of git |
+| `.gitignore` | Keeps the generated data files out of git |
 
 If `site/data/season.json` is missing, the site falls back to a clearly labelled example season so you can still try it.
 
@@ -46,7 +46,7 @@ Every section has a comment banner, so searching for the words in the table belo
 | Part | Search for | What it does |
 |---|---|---|
 | Styles | `STYLES` | All colours are variables at the top. Change them there and the whole site follows |
-| Page layout | `TAB 1` to `TAB 6` | One HTML section per tab. Most are filled in by the script |
+| Page layout | `TAB 1` to `TAB 7` | One HTML section per tab. Most are filled in by the script |
 | How the script is organised | `HOW THIS SCRIPT IS ORGANISED` | Overview of the engine, UI and boot sections, plus a glossary of terms |
 | Season data | `SEASON DATA`, `EXAMPLE SEASON`, `REAL SEASON` | How games are stored, the made-up example season, and the loader for real data |
 | Ratings | `RATINGS FROM RESULTS` | Works out how strong each club is from results |
@@ -56,6 +56,7 @@ Every section has a comment banner, so searching for the words in the table belo
 | Running simulations | `RUNNING SIMULATIONS` | Runs thousands of seasons in chunks so the page stays responsive |
 | Drawing the page | `RENDER FUNCTIONS`, `MODELS TAB` | Functions named `renderLadder`, `renderClub`, `renderModels` and so on |
 | Tabs, buttons and sliders | `TABS`, `CONTROLS` | What happens when you move a slider, click something or change tab |
+| Our model, backtest, weather | `OUR OWN MODEL`, `TIMELINE`, `SCORING PREDICTORS`, `WEATHER EFFECTS`, `BACKTEST TAB` | SirenSim v1 (rating + rest + travel), scoring every predictor on past games, and the rain/wind fit |
 | Start-up | `BOOT` | Loads the data and runs the first simulation |
 
 Searching in VS Code is not case sensitive by default, so Ctrl+Shift+F finds these from any file.
@@ -75,6 +76,14 @@ Searching in VS Code is not case sensitive by default, so Ctrl+Shift+F finds the
 - **Prediction source (Simulator tab):** decides where the sim gets the expected margin for every game still to be played. The default is all Squiggle models averaged. You can also pick the top 6 models by accuracy, any single model, or club ratings only. "Use model tips for" limits models to the next 1, 2 or 4 rounds, which keeps a rewound season realistic, because live the models only tip a round or two ahead.
 - **Club ratings:** fitted from the season's results (average margin, adjusted for opponent strength and home advantage). They are the fallback for games no model has tipped, and they decide the finals. They are noisy early in the season. Edit them in the Simulator tab.
 
+## SirenSim v1, the Backtest tab and weather
+
+- **SirenSim v1** is our own model: Elo-style club ratings plus days of rest plus travel distance. It only ever uses results from before the game it is tipping, so its scores are honest. Its settings are sliders on the Backtest tab. It is also in the Prediction source dropdown on the Simulator tab.
+- **Backtest tab** replays past seasons (from `history.json`) and marks every Squiggle model, the consensus, SirenSim v1 and an "always tip the home side" baseline. The oldest season is only used to warm the model up. Accuracy shows a 95% margin of error: gaps smaller than it are noise. Do not tune the sliders on the same seasons you judge the model on.
+- **Weather** comes from [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0, keep the credit in the page). Rain and wind are fitted against total points from history, and upcoming games with a forecast get a different expected total and more randomness when wet. Untick "Use weather" on the Simulator tab to turn that off.
+- **History is cached.** Past seasons never change, so the workflow saves `history.json` between runs. To force a fresh download, change `history-v1` to `history-v2` in `.github/workflows/update-data.yml`. Locally, set `FORCE_HISTORY=1`. `HISTORY_SEASONS` (default 4) sets how many past seasons, and `WEATHER=0` skips weather.
+- Unknown grounds are listed in the data script's log. Add them to the `VENUES` table in `scripts/fetch-data.mjs`.
+
 ## Adding your own model later
 
 The sim is built so your team's own model can sit alongside the Squiggle ones. Search `YOUR OWN MODEL` in `site/index.html`. A custom model is one object added to the `CUSTOM_MODELS` list:
@@ -93,7 +102,7 @@ CUSTOM_MODELS.push({
 
 It then appears in the Prediction source dropdown on the Simulator tab, and the sim uses its margins for every game it returns a number for. Inside `predict` you can use `GH[g]` and `GA[g]` (home and away team), `GR[g]` (round), `GDATE[g]` (date), `HAS[g]` and `AM[g]` (results for games already played), and the other models' tips through `M.byGame.get(g)`. Model margins should already include home ground advantage.
 
-Not done yet: custom models are not scored on the Models tab leaderboard, so adding that is the natural next step once a real model exists.
+SirenSim v1 is added this way (search `siren1`). It is scored separately through the timeline, so a new model that needs scoring should be added in `backtestRows` and `extraRows`.
 
 ## If the data refresh fails
 

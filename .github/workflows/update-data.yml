@@ -1,6 +1,6 @@
-# This workflow rebuilds and publishes the website. It does three things:
-#   1. Downloads fresh AFL data from Squiggle (scripts/fetch-data.mjs).
-#   2. Bundles the site/ folder, including the new data/season.json.
+# This workflow rebuilds and publishes the website. It does these things:
+#   1. Downloads fresh AFL data and weather (scripts/fetch-data.mjs).
+#   2. Bundles the site/ folder, including the new data/season.json and data/history.json.
 #   3. Publishes it to GitHub Pages.
 # It runs by itself on a schedule, whenever you push to main, or when you click "Run workflow".
 
@@ -45,9 +45,24 @@ jobs:
         with:
           node-version: 20
 
-      # Download games, results and model tips from Squiggle and write site/data/season.json.
+      # Work out the current year. It is part of the cache name below.
+      - name: Work out the current year
+        id: year
+        run: echo "year=$(date +%Y)" >> "$GITHUB_OUTPUT"
+
+      # Past seasons never change, so we download them once and keep a saved copy (history.json).
+      # Squiggle asks people not to download the same data over and over, and this also keeps every run fast.
+      # To force a fresh download, change v1 to v2 in the key below.
+      - name: Restore saved past seasons
+        uses: actions/cache@v4
+        with:
+          path: site/data/history.json
+          key: history-v1-${{ steps.year.outputs.year }}
+
+      # Download games, results, venues, weather and model tips, and write site/data/season.json
+      # (and history.json if it was not restored from the cache).
       # SQUIGGLE_CONTACT comes from Settings > Secrets and variables > Actions > Variables.
-      - name: Fetch Squiggle data
+      - name: Fetch data
         run: node scripts/fetch-data.mjs
         env:
           SQUIGGLE_CONTACT: ${{ vars.SQUIGGLE_CONTACT }}
@@ -55,7 +70,7 @@ jobs:
       # Prepare GitHub Pages.
       - uses: actions/configure-pages@v5
 
-      # Package the site/ folder (the website plus the fresh data file).
+      # Package the site/ folder (the website plus the fresh data files).
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
