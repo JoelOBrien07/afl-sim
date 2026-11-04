@@ -119,6 +119,11 @@ const pq = new Map();   // player id -> { w, s, name }
 const quality = (pid) => { const p = pq.get(pid); return p ? (p.s + PRIOR_W * PRIOR_Z) / (p.w + PRIOR_W) : PRIOR_Z; };
 const formState = new Map();   // team -> running average of (for minus against) for each form stat
 const lastLineup = new Map();  // team -> player ids from its latest match
+// A club's usual lineup strength (a running average of recent lineups). Comparing a lineup with this shows who is MISSING,
+// which the club rating can not know. The rating already knows the club is usually strong; it does not know the star is out.
+const usualL = new Map();
+const USUAL_KEEP = 0.85;
+const relStrength = (team, L) => { const u = usualL.get(team); return u && u.n >= 3 ? L - u.v : 0; };
 const matchFeat = new Map();   // match id -> { teamKey: { L: lineup strength, form: [...] } }
 const strength = (pids) => pids.map(quality).sort((a, b) => b - a).slice(0, 22).reduce((s, v) => s + v, 0);
 const ordered = [...matches.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : String(a.id).localeCompare(String(b.id))));
@@ -126,7 +131,8 @@ for (const m of ordered) {
   const side = {};
   for (const t of [m.home, m.away]) {
     const rows = m.rows.filter((r) => r.team === t);
-    side[t] = rows.length >= 15 ? { L: strength(rows.map((r) => r.pid)), form: (formState.get(t) || FORM_STATS.map(() => 0)).slice() } : null;
+    const L = rows.length >= 15 ? strength(rows.map((r) => r.pid)) : null;
+    side[t] = L != null ? { L, rel: relStrength(t, L), form: (formState.get(t) || FORM_STATS.map(() => 0)).slice() } : null;
   }
   matchFeat.set(m.id, side);
   // Now learn from the match.
@@ -140,6 +146,7 @@ for (const m of ordered) {
       p.s = p.s * DECAY + z; p.w = p.w * DECAY + 1; pq.set(r.pid, p);
     }
     if (mine.length) lastLineup.set(t, mine.map((r) => r.pid));
+    if (side[t]) { const u = usualL.get(t); if (u) { u.v = USUAL_KEEP * u.v + (1 - USUAL_KEEP) * side[t].L; u.n++; } else usualL.set(t, { v: side[t].L, n: 1 }); }
     const f = formState.get(t) || FORM_STATS.map(() => 0);
     FORM_STATS.forEach((_, k) => {
       const a = mine.map((r) => r.st[k]).filter(isFinite), b = theirs.map((r) => r.st[k]).filter(isFinite);
@@ -173,7 +180,7 @@ for (const s of (history.seasons || [])) if (s && s.games && s.games.length && s
 seasonsList.sort((a, b) => a.y - b.y);
 seasonsList.push({ y: currentYear, games: season.games.slice().sort(cmpGame), cur: true });
 
-const FEATURES = ['Club rating gap', 'Rest (days)', 'Travel (1,000 km)', 'Lineup strength', 'Inside 50s form', 'Clearances form', 'Contested possessions form', 'Tackles form', 'Score involvements form', 'Metres gained form'];
+const FEATURES = ['Club rating gap', 'Rest (days)', 'Travel (1,000 km)', 'Lineup strength', 'Lineup vs usual (who is missing)', 'Inside 50s form', 'Clearances form', 'Contested possessions form', 'Tackles form', 'Score involvements form', 'Metres gained form'];
 const BASE_COLS = [0, 1, 2];   // the columns that do not need player data (used to show how much the player data adds)
 const rat = new Float64Array(18), lastU = new Float64Array(18).fill(NaN), lastY = new Int32Array(18).fill(-1);
 const rows = [];
@@ -197,25 +204,25 @@ for (const s of seasonsList) {
     const res = done ? g.hs - g.as : null;
     const x = [rat[h] - rat[a], clamp(rh - ra, -4, 4), (dA - dH) / 1000];
     // Player features: from the real match if it was played, otherwise from the named team (or the last team each side played).
-    let L = null, F = null;
+    let L = null, R = null, F = null;
     if (done) {
       const m = findMatch(s.y, hk, ak, g.date), sd = m && matchFeat.get(m.id);
-      if (sd && sd[hk] && sd[ak]) { matched++; L = sd[hk].L - sd[ak].L; F = sd[hk].form.map((v, k) => v - sd[ak].form[k]); }
+      if (sd && sd[hk] && sd[ak]) { matched++; L = sd[hk].L - sd[ak].L; R = sd[hk].rel - sd[ak].rel; F = sd[hk].form.map((v, k) => v - sd[ak].form[k]); }
     } else {
       const side = (key) => {
         const names = lineupBy.get(s.y + '|' + g.round + '|' + key);
         if (names) {
           const pids = names.map((n) => byName.get(nameKey(n))).filter(Boolean);
-          if (pids.length >= 18) { lineupUsed++; return strength(pids); }
+          if (pids.length >= 18) { lineupUsed++; const v = strength(pids); return [v, relStrength(key, v)]; }
         }
         const last = lastLineup.get(key);
-        if (last) { lastLineupUsed++; return strength(last); }
+        if (last) { lastLineupUsed++; const v = strength(last); return [v, relStrength(key, v)]; }
         return null;
       };
       const lh = side(hk), la = side(ak), fh = formState.get(hk), fa = formState.get(ak);
-      if (lh != null && la != null && fh && fa) { L = lh - la; F = fh.map((v, k) => v - fa[k]); }
+      if (lh != null && la != null && fh && fa) { L = lh[0] - la[0]; R = lh[1] - la[1]; F = fh.map((v, k) => v - fa[k]); }
     }
-    if (L != null) x.push(L, ...F); else x.push(...FEATURES.slice(3).map(() => NaN));
+    if (L != null) x.push(L, R, ...F); else x.push(...FEATURES.slice(3).map(() => NaN));
     rows.push({ gid: g.id, year: s.y, cur: !!s.cur, done, y: res, x });
     // Learn from the result: move the club ratings toward what happened.
     if (done) {
@@ -268,7 +275,7 @@ function walk(cols, lambda) {
   const years = [...new Set(rows.map((r) => r.year))].sort((a, b) => a - b);
   for (const yr of years.slice(1)) {
     const train = rows.filter((r) => r.year < yr && r.y != null && complete(r, cols));
-    if (train.length < 400) continue;
+    if (train.length < 300) continue;
     const mod = fit(train, cols, lambda);
     if (!mod) continue;
     for (const r of rows) if (r.year === yr && complete(r, cols)) out.set(r.gid, predict(mod, r.x));
@@ -300,12 +307,19 @@ console.log(`                                     plus lineup and form (v2): ${e
 
 // The model for games still to be played is trained on everything completed. Other games keep their walk-forward predictions.
 const trainAll = rows.filter((r) => r.y != null && complete(r, ALL_COLS));
-if (trainAll.length < 400) { console.log('Not enough complete games to train (' + trainAll.length + '). v2 skipped.'); process.exit(1); }
+if (trainAll.length < 300) { console.log('Not enough complete games to train (' + trainAll.length + '). v2 skipped.'); process.exit(1); }
 const live = fit(trainAll, ALL_COLS, lambda);
+const liveBase = fit(rows.filter((r) => r.y != null && complete(r, BASE_COLS)), BASE_COLS, lambda);
 const pred = {};
+let fullCount = 0;
 for (const r of rows) {
+  // Prefer the full model. Where player data is missing (older seasons, or a season the data source has not published yet),
+  // fall back to the rating, rest and travel model so v2 still has a tip for every game.
   let p = walkAll.get(r.gid);
+  if (p == null) p = walkBase.get(r.gid);
   if (!r.done && complete(r, ALL_COLS)) p = predict(live, r.x);
+  else if (!r.done && p == null && liveBase) p = predict(liveBase, r.x);
+  if (walkAll.has(r.gid) || (!r.done && complete(r, ALL_COLS))) fullCount++;
   if (p != null && isFinite(p)) pred[r.gid] = Math.round(p * 10) / 10;
 }
 const weights = FEATURES.map((name, i) => ({ name, w: Math.round(live.w[i] * 100) / 100 }));
@@ -314,4 +328,4 @@ weights.forEach((x) => console.log('  ' + x.name.padEnd(28) + (x.w >= 0 ? '+' : 
 const meta = { builtAt: new Date().toISOString(), lambda, trainGames: trainAll.length, forYear: currentYear,
   eval: { n: evalAll.n, v2: { acc: +evalAll.acc.toFixed(1), mae: +evalAll.mae.toFixed(2) }, base: { acc: +evalBase.acc.toFixed(1), mae: +evalBase.mae.toFixed(2) } } };
 writeFileSync(OUT, JSON.stringify({ meta, weights, pred }));
-console.log(`Wrote ${OUT}: predictions for ${Object.keys(pred).length} games.`);
+console.log(`Wrote ${OUT}: predictions for ${Object.keys(pred).length} games (${fullCount} with player data, the rest from the rating, rest and travel model).`);
