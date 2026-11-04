@@ -11,7 +11,7 @@
 //
 // Optional settings (environment variables):
 //   SEASON=2026          force a season year
-//   HISTORY_SEASONS=4    how many previous seasons go into history.json (0 turns history off)
+//   HISTORY_SEASONS=10   how many previous seasons go into history.json (0 turns history off)
 //   FORCE_HISTORY=1      download history again even if history.json already exists
 //   WEATHER=0            skip weather completely
 //   SQUIGGLE_BASE, WEATHER_ARCHIVE_BASE, WEATHER_FORECAST_BASE   point at fake servers when testing
@@ -35,7 +35,7 @@ const SQUIGGLE = process.env.SQUIGGLE_BASE || 'https://api.squiggle.com.au/';
 const ARCHIVE = process.env.WEATHER_ARCHIVE_BASE || 'https://archive-api.open-meteo.com/v1/archive';
 const FORECAST = process.env.WEATHER_FORECAST_BASE || 'https://api.open-meteo.com/v1/forecast';
 const WEATHER_ON = process.env.WEATHER !== '0';
-const HISTORY_SEASONS = process.env.HISTORY_SEASONS === undefined ? 4 : Math.max(0, Number(process.env.HISTORY_SEASONS) || 0);
+const HISTORY_SEASONS = process.env.HISTORY_SEASONS === undefined ? 10 : Math.max(0, Number(process.env.HISTORY_SEASONS) || 0);
 const FORCE_HISTORY = process.env.FORCE_HISTORY === '1';
 // UA is the identifying header sent with every request. DATA_DIR is where the files are written.
 const UA = `SirenSim/1.0 (${contact})`;

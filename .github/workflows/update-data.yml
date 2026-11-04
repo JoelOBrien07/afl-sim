@@ -52,12 +52,12 @@ jobs:
 
       # Past seasons never change, so we download them once and keep a saved copy (history.json).
       # Squiggle asks people not to download the same data over and over, and this also keeps every run fast.
-      # To force a fresh download, change v1 to v2 in the key below.
+      # To force a fresh download, change v2 to v3 in the key below.
       - name: Restore saved past seasons
         uses: actions/cache@v4
         with:
           path: site/data/history.json
-          key: history-v1-${{ steps.year.outputs.year }}
+          key: history-v2-${{ steps.year.outputs.year }}
 
       # Download games, results, venues, weather and model tips, and write site/data/season.json
       # (and history.json if it was not restored from the cache).
