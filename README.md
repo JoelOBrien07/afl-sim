@@ -107,9 +107,10 @@ A green, player-focused section: season and scoring picker (SuperCoach score, AF
 
 - **Data:** `site/data/players.json`, built by `scripts/build-players.mjs` from the same player table v2 uses. It holds the last two seasons. The Action step is called "Build Fantasy player data" and is allowed to fail without stopping the deploy.
 - **Unlike the rest of the player data, this file IS published**, because it contains each player's game scores. Please read the Fryzigg and AFL.com.au terms before sharing the site beyond your team. If you would rather not publish it, delete the `Build Fantasy player data` step in the workflow and the tab will show a "no player data" message.
+- **SuperCoach-style estimate:** if the data source has no official SuperCoach scores, the tab shows our own estimate instead. `scripts/fetch-players.R` adds up the Champion Data stats we have using the points table SuperCoach publishes, then corrects it against official scores where the data has any (the fit is printed in the Actions log and shown on the tab). Stats the data does not have (handball receives, knock ons, smothers) are missing, so it is an approximation, always labelled as an estimate.
 - **Not SuperCoach:** the tab uses the scores as supplied by Fryzigg and shows no prices, break-evens or logos. Keep it that way so it is not mistaken for an official product. The tab is called Fantasy for that reason.
 - **Positions** are grouped as DEF, MID, RUC and FWD from Fryzigg's position codes. Any code the script does not recognise is printed in the Actions log; add it to `posGroup` in `scripts/build-players.mjs`.
-- **Cache:** the Action's saved player data key is now `players-v2`, because the Fantasy tab needs extra columns. The old saved file is ignored automatically.
+- **Cache:** the Action's saved player data key is now `players-v3`, because the Fantasy tab needs extra columns. The old saved file is ignored automatically. It is now `players-v3`.
 
 ## Adding your own model later
 

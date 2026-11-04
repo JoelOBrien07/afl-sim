@@ -53,7 +53,7 @@ jobs:
 
       # Past seasons never change, so we download them once and keep a saved copy (history.json).
       # Squiggle asks people not to download the same data over and over, and this also keeps every run fast.
-      # To force a fresh download, change v2 to v3 in the key below.
+      # To force a fresh download, change v3 to v4 in the key below.
       - name: Restore saved past seasons
         uses: actions/cache@v4
         with:
@@ -92,13 +92,13 @@ jobs:
         run: Rscript -e 'if (!requireNamespace("fitzRoy", quietly = TRUE)) install.packages("fitzRoy")'
 
       # Keep the downloaded player data between runs. The script only downloads seasons it does not have, plus the current one.
-      # To force a fresh download of everything, change v2 to v3 in the key below.
+      # To force a fresh download of everything, change v3 to v4 in the key below.
       - name: Restore saved player data
         continue-on-error: true
         uses: actions/cache@v4
         with:
           path: build/players.tsv
-          key: players-v2-${{ steps.year.outputs.year }}
+          key: players-v3-${{ steps.year.outputs.year }}
 
       - name: Download player data
         continue-on-error: true

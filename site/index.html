@@ -446,7 +446,7 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
         <div id="fanDetail" hidden></div>
         <div class="vhead"><div><h3 class="sub">Round leaders</h3></div><div class="field" style="min-width:150px"><label for="fanRound">Round</label><select id="fanRound"></select></div></div>
         <div class="scroll" id="fanRoundBox"></div>
-        <p class="fan-note">Scores are the SuperCoach, AFL Fantasy and rating-point figures supplied by Fryzigg player stats. This site is not affiliated with SuperCoach or AFL Fantasy and shows no prices or official break-evens. "Proj" is our own simple projection: a weighted average that counts recent games most.</p>
+        <p class="fan-note">Scores are the AFL Fantasy and rating-point figures supplied by Fryzigg player stats, plus SuperCoach scores where the data has them. "SuperCoach-style" is our own estimate. This site is not affiliated with SuperCoach or AFL Fantasy and shows no prices or official break-evens. "Proj" is our own simple projection: a weighted average that counts recent games most.</p>
       </div>
     </section>
 
@@ -1680,11 +1680,12 @@ async function loadData(){
 }
 // FANTASY TAB
 // PL is data/players.json: { meta, seasons: { "2026": [ { id, n: name, t: team id, p: position, g: [game, ...] } ] } }
-// Each game is [round, date, opponent team id, home 1/away 0, SuperCoach, AFL Fantasy, rating points, disposals, marks, goals, tackles, time on ground %]
+// Each game is [round, date, opponent team id, home 1/away 0, SuperCoach, AFL Fantasy, rating points, disposals, marks, goals, tackles, time on ground %, estimated SuperCoach-style score]
 let PL=null;
 // What the tab is currently showing. metric is the index into a game (4 = SuperCoach, 5 = AFL Fantasy, 6 = rating points).
 const FAN={season:null,metric:4,sort:'avg',dir:-1,q:'',club:'all',pos:'all',minG:5,limit:100,sel:null,round:null,rows:[]};
-const FAN_METRICS=[[4,'SuperCoach score'],[5,'AFL Fantasy score'],[6,'Rating points']];
+// 4 = official SuperCoach score (only when the data has it), 12 = OUR estimate of a SuperCoach-style score, 5 = AFL Fantasy, 6 = rating points.
+const FAN_METRICS=[[4,'SuperCoach score'],[12,'SuperCoach-style (our estimate)'],[5,'AFL Fantasy score'],[6,'Rating points']];
 // Downloads data/players.json. Returns null if it is missing, so the tab shows a message instead.
 async function loadPlayers(){
   try{
@@ -1810,6 +1811,12 @@ function renderFantasy(){
     const alt=FAN_METRICS.find(([i])=>av[i]);
     if(alt){note.textContent=FAN_METRICS.find(([i])=>i===FAN.metric)[1]+' is not in the data for '+FAN.season+', so this shows '+alt[1]+' instead.';note.hidden=false;FAN.metric=alt[0]}
     else{note.textContent='There are no scores in the data for '+FAN.season+'.';note.hidden=false}
+  }
+  // The estimate is never presented as official, so say what it is whenever it is on screen.
+  if(FAN.metric===12){
+    const fit=PL.meta&&PL.meta.scxFit;
+    note.textContent=(note.hidden?'':note.textContent+' ')+'The SuperCoach-style score is our own estimate, worked out from Champion Data stats with the points SuperCoach publishes, so it will not match the official number exactly'+(fit?' ('+fit+')':'')+'.';
+    note.hidden=false;
   }
   document.querySelectorAll('#fanMetric option').forEach(o=>{const m=FAN_METRICS.find(([i])=>String(i)===o.value);o.textContent=m[1]+(av[m[0]]?'':' (no data this season)')});
   $('#fanMetric').value=String(FAN.metric);

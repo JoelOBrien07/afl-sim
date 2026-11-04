@@ -3,10 +3,13 @@
 // player for the last two seasons. The website works out averages, form and so on itself, so this file only has to hold
 // the games. Each game is a short list of numbers:
 //   [round, date, opponent team id, home (1) or away (0), SuperCoach score, AFL Fantasy score, rating points,
-//    disposals, marks, goals, tackles, time on ground %]
+//    disposals, marks, goals, tackles, time on ground %, estimated SuperCoach-style score]
+// The last number is OUR estimate built from Champion Data stats using SuperCoach's published points table (see fetch-players.R).
+// It is never the official score.
 // Team ids are the same ones Squiggle uses (1 to 18), so the website can look up club names and colours.
 // Settings (environment variables): DATA_DIR (default site/data), PLAYERS_FILE (build/players.tsv), FANTASY_SEASONS (default 2).
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 const DATA = process.env.DATA_DIR || 'site/data';
 const PLAYERS_FILE = process.env.PLAYERS_FILE || 'build/players.tsv';
@@ -76,7 +79,7 @@ for (const l of lines) {
   const pg = posGroup(c[col.pos]);
   if (pg) p.pos.set(pg, (p.pos.get(pg) || 0) + 1);
   p.g.push([roundLabel(c[col.round]), c[col.date], opp, mine === home ? 1 : 0, num(c[col.sc]), num(c[col.af]), num(c[col.rating]),
-    num(c[col.disp]), num(c[col.mk]), num(c[col.gl]), num(c[col.tkl]), num(c[col.tog])]);
+    num(c[col.disp]), num(c[col.mk]), num(c[col.gl]), num(c[col.tkl]), num(c[col.tog]), 'scx' in col ? num(c[col.scx]) : null]);
 }
 const seasons = {};
 for (const y of years) {
@@ -89,10 +92,12 @@ for (const y of years) {
   list.sort((a, b) => (a.n < b.n ? -1 : 1));
   seasons[y] = list;
   // How many games have each score. A zero here means the data source has no values for that scoring system that season.
-  const have = [4, 5, 6].map((i) => list.reduce((s, p) => s + p.g.filter((g) => g[i] != null).length, 0));
-  console.log(`${y}: ${list.length} players, ${list.reduce((s, p) => s + p.g.length, 0)} games. Games with a SuperCoach score: ${have[0]}, AFL Fantasy: ${have[1]}, rating points: ${have[2]}`);
+  const have = [4, 5, 6, 12].map((i) => list.reduce((s, p) => s + p.g.filter((g) => g[i] != null).length, 0));
+  console.log(`${y}: ${list.length} players, ${list.reduce((s, p) => s + p.g.length, 0)} games. Games with a SuperCoach score: ${have[0]}, AFL Fantasy: ${have[1]}, rating points: ${have[2]}, SuperCoach-style estimate: ${have[3]}`);
 }
 if (unknownTeams.size) console.warn('WARNING: unrecognised team names:', [...unknownTeams].join(', '));
 if (unknownPos.size) console.warn('NOTE: unrecognised position codes (add them to posGroup):', [...unknownPos.entries()].map(([k, v]) => k + ' x' + v).join(', '));
-writeFileSync(OUT, JSON.stringify({ meta: { builtAt: new Date().toISOString(), seasons: years }, seasons }));
+const fitFile = dirname(PLAYERS_FILE) + '/scx-fit.txt';
+const scxFit = existsSync(fitFile) ? readFileSync(fitFile, 'utf8').trim() : null;
+writeFileSync(OUT, JSON.stringify({ meta: { builtAt: new Date().toISOString(), seasons: years, scxFit }, seasons }));
 console.log('Wrote ' + OUT);

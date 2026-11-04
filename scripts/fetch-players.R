@@ -49,6 +49,21 @@ tidy <- function(d) {
     mk = col(d, "marks"),
     gl = col(d, "goals"),
     tog = col(d, "time_on_ground_percentage"),
+    # Ingredients for the SuperCoach-style estimate (see the bottom of this script).
+    ek = col(d, "effective_kicks"),
+    clg = col(d, "clangers"),
+    ehb = suppressWarnings(as.numeric(col(d, "effective_disposals")) - as.numeric(col(d, "effective_kicks"))),
+    bh = col(d, "behinds"),
+    ga = col(d, "goal_assists"),
+    cm = col(d, "contested_marks"),
+    um = suppressWarnings(as.numeric(col(d, "marks")) - as.numeric(col(d, "contested_marks"))),
+    lm = col(d, "marks_on_lead"),
+    spl = col(d, "spoils"),
+    ffor = col(d, "free_kicks_for"),
+    fag = col(d, "free_kicks_against"),
+    hta = col(d, "hitouts_to_advantage"),
+    gbg = col(d, "ground_ball_gets"),
+    upos = col(d, "uncontested_possessions"),
     stringsAsFactors = FALSE
   )
 }
@@ -65,7 +80,7 @@ if (file.exists(players_file)) {
   old <- tryCatch(read.delim(players_file, stringsAsFactors = FALSE, quote = ""), error = function(e) NULL)
 }
 # A saved file from an older version of this script will not have the newer columns, so it is thrown away and downloaded again.
-if (!is.null(old) && !all(c("pos", "af", "disp", "mk", "gl", "tog") %in% names(old))) old <- NULL
+if (!is.null(old) && !all(c("pos", "af", "disp", "mk", "gl", "tog", "ek", "gbg", "upos") %in% names(old))) old <- NULL
 have <- if (!is.null(old)) setdiff(unique(old$year), year) else integer()
 if (!is.null(old)) old <- old[old$year %in% have & old$year %in% seasons, ]
 need <- setdiff(seasons, have)
@@ -88,6 +103,35 @@ if (is.null(all_rows) || nrow(all_rows) == 0) {
   quit(status = 1)
 }
 all_rows <- all_rows[order(all_rows$date, all_rows$match_id), ]
+
+# SUPERCOACH-STYLE ESTIMATE
+# SuperCoach publishes an "indicative" points table built on Champion Data stats. Fryzigg gives us most, but not all, of
+# those stats (for example no handball receives, knock ons or smothers). So we add up what we have using the published
+# points, which gives "prior". The official scores, where the data has them, are then used to correct for the missing
+# pieces: scx = a + b * prior + c * uncontested possessions, fitted by least squares. Where the data has no official
+# scores at all, the published points are used as they are (a = 0, b = 1, c = 0), which will run low.
+# It is always shown as an ESTIMATE and never as the official score.
+n <- function(x) suppressWarnings(as.numeric(x))
+points <- c(ek = 4, clg = -4, ehb = 1.5, gl = 8, bh = 1, ga = 3.5, cm = 7, um = 3, lm = 5,
+            spl = 2, tkl = 4, ffor = 4, fag = -4, hta = 5, gbg = 4.5)   # contested marks 6 to 8 and uncontested 2 to 4 use the middle
+prior <- rep(0, nrow(all_rows))
+for (k in names(points)) { v <- n(all_rows[[k]]); prior <- prior + points[[k]] * ifelse(is.na(v), 0, v) }
+prior[is.na(n(all_rows$ek)) & is.na(n(all_rows$gbg))] <- NA   # no ingredients at all: no estimate
+fit_df <- data.frame(sc = n(all_rows$sc), prior = prior, upos = ifelse(is.na(n(all_rows$upos)), 0, n(all_rows$upos)))
+ok <- !is.na(fit_df$sc) & !is.na(fit_df$prior)
+fit_note <- "uncalibrated: no official SuperCoach scores in the data, so the published points were used as they are and will run low"
+a <- 0; b <- 1; cc <- 0
+if (sum(ok) >= 1000) {
+  m <- lm(sc ~ prior + upos, data = fit_df[ok, ])
+  a <- unname(coef(m)[1]); b <- unname(coef(m)[2]); cc <- unname(coef(m)[3])
+  r2 <- summary(m)$r.squared
+  mae <- mean(abs(residuals(m)))
+  fit_note <- sprintf("calibrated on %d official scores: R squared %.2f, average miss %.1f points", sum(ok), r2, mae)
+}
+all_rows$scx <- round(a + b * fit_df$prior + cc * fit_df$upos, 1)
+cat("SuperCoach-style estimate:", fit_note, "\n")
+writeLines(fit_note, "build/scx-fit.txt")
+
 write_tsv(all_rows, players_file)
 cat("Saved", nrow(all_rows), "player rows for", length(unique(all_rows$year)), "seasons to", players_file, "\n")
 
