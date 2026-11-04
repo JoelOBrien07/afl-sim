@@ -88,7 +88,9 @@ for (const y of years) {
   }
   list.sort((a, b) => (a.n < b.n ? -1 : 1));
   seasons[y] = list;
-  console.log(`${y}: ${list.length} players, ${list.reduce((s, p) => s + p.g.length, 0)} games`);
+  // How many games have each score. A zero here means the data source has no values for that scoring system that season.
+  const have = [4, 5, 6].map((i) => list.reduce((s, p) => s + p.g.filter((g) => g[i] != null).length, 0));
+  console.log(`${y}: ${list.length} players, ${list.reduce((s, p) => s + p.g.length, 0)} games. Games with a SuperCoach score: ${have[0]}, AFL Fantasy: ${have[1]}, rating points: ${have[2]}`);
 }
 if (unknownTeams.size) console.warn('WARNING: unrecognised team names:', [...unknownTeams].join(', '));
 if (unknownPos.size) console.warn('NOTE: unrecognised position codes (add them to posGroup):', [...unknownPos.entries()].map(([k, v]) => k + ' x' + v).join(', '));

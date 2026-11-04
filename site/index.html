@@ -431,6 +431,7 @@ select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
           <div class="field"><label for="fanMetric">Scoring</label><select id="fanMetric"></select></div>
         </div>
       </div>
+      <p class="note" id="fanNote" hidden></p>
       <p class="note" id="fanEmpty" hidden>No player data yet. It is built by the data refresh (the "Download player data" and "Build Fantasy player data" steps). See the README.</p>
       <div id="fanBody" style="display:grid;gap:18px" hidden>
         <div class="fan-spot" id="fanSpot"></div>
@@ -1793,9 +1794,25 @@ function fanRound(){
   out.slice(0,10).forEach(([p,g],i)=>{h+='<tr><td>'+(i+1)+'</td><td><button class="pname" type="button" data-pid="'+p.id+'" style="background:none;border:0;padding:0;color:var(--ink);font:600 16px var(--display);cursor:pointer">'+esc(p.n)+'</button></td><td>'+TEAMS[p.t-1].c+'</td><td>'+(g[3]?'v ':'@ ')+TEAMS[g[2]-1].c+'</td><td style="color:var(--accent)">'+g[m]+'</td></tr>'});
   $('#fanRoundBox').innerHTML=h+'</tbody></table>';
 }
+// How many games have a score for each scoring system in the chosen season. Some seasons are missing a system in the data source.
+function fanAvail(){
+  const out={};FAN_METRICS.forEach(([i])=>{out[i]=0});
+  for(const p of (PL.seasons[FAN.season]||[]))for(const g of p.g)FAN_METRICS.forEach(([i])=>{if(g[i]!=null)out[i]++});
+  return out;
+}
 // Redraws everything on the tab after the season, scoring system or a filter changes.
 function renderFantasy(){
   if(!PL)return;
+  // If the chosen scoring system has no scores this season, switch to one that does and say so.
+  const av=fanAvail(),note=$('#fanNote');
+  note.hidden=true;
+  if(!av[FAN.metric]){
+    const alt=FAN_METRICS.find(([i])=>av[i]);
+    if(alt){note.textContent=FAN_METRICS.find(([i])=>i===FAN.metric)[1]+' is not in the data for '+FAN.season+', so this shows '+alt[1]+' instead.';note.hidden=false;FAN.metric=alt[0]}
+    else{note.textContent='There are no scores in the data for '+FAN.season+'.';note.hidden=false}
+  }
+  document.querySelectorAll('#fanMetric option').forEach(o=>{const m=FAN_METRICS.find(([i])=>String(i)===o.value);o.textContent=m[1]+(av[m[0]]?'':' (no data this season)')});
+  $('#fanMetric').value=String(FAN.metric);
   fanBuild();fanSpotlight();fanTable();
   if(FAN.sel&&FAN.rows.some(x=>x.p.id===FAN.sel))fanDetail(FAN.sel);else $('#fanDetail').hidden=true;
   const rounds=[...new Set((PL.seasons[FAN.season]||[]).flatMap(p=>p.g.map(g=>g[0])))];
